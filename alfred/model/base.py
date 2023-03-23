@@ -15,22 +15,6 @@ class Model(nn.Module):
         self.visual_tensor_shape = data_util.read_dataset_info(
             args.data['train'][0])['feat_shape'][1:]
 
-        # create language and action embeddings
-        self.embs_ann = nn.ModuleDict({})
-        for emb_name, emb_size in embs_ann.items():
-            self.embs_ann[emb_name] = nn.Embedding(emb_size, args.demb)
-
-        # dropouts
-        self.dropout_vis = nn.Dropout(args.dropout['vis'], inplace=True)
-        self.dropout_lang = nn.Dropout2d(args.dropout['lang'])
-
-    def init_weights(self, init_range=0.1):
-        '''
-        init linear layers in embeddings
-        '''
-        for emb_ann in self.embs_ann.values():
-            emb_ann.weight.data.uniform_(-init_range, init_range)
-
     def compute_metrics(self, model_out, gt_dict, metrics_dict, verbose):
         '''
         compute model-specific metrics and put it to metrics dict

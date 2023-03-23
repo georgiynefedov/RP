@@ -1,17 +1,18 @@
-import revtok
 import copy
 
 from vocab import Vocab
 
-from alfred.gen.utils import py_util
 from alfred.utils import model_util
+from alfred.nn.enc_lang import EncoderLang
+import torch
 
 
 class Preprocessor(object):
-    def __init__(self, vocab, subgoal_ann=False, is_test_split=False, frame_size=300):
+    def __init__(self, vocab, subgoal_ann=False, is_test_split=False, frame_size=300, device=torch.device('cuda')):
         self.subgoal_ann = subgoal_ann
         self.is_test_split = is_test_split
         self.frame_size = frame_size
+        self.device = device
 
         if vocab is None:
             self.vocab = {
@@ -21,34 +22,14 @@ class Preprocessor(object):
             }
         else:
             self.vocab = vocab
-
+        self.encoder_lang = EncoderLang()
         self.word_seg = self.vocab['word'].word2index('<<seg>>', train=False)
-
-    @staticmethod
-    def numericalize(vocab, words, train=True):
-        '''
-        converts words to unique integers
-        '''
-        if not train:
-            new_words = set(words) - set(vocab.counts.keys())
-            if new_words:
-                # replace unknown words with <<pad>>
-                words = [w if w not in new_words else '<<pad>>' for w in words]
-        return vocab.word2index(words, train=train)
 
     def process_language(self, ex, traj, r_idx):
         # tokenize language
         if not self.subgoal_ann:
             goal_ann = ex['turk_annotations']['anns'][r_idx]['task_desc']
             instr_anns = ex['turk_annotations']['anns'][r_idx]['high_descs']
-            # tokenize annotations
-            goal_ann = revtok.tokenize(py_util.remove_spaces_and_lower(goal_ann))
-            instr_anns = [revtok.tokenize(py_util.remove_spaces_and_lower(instr_ann))
-                          for instr_ann in instr_anns]
-            # this might be not needed
-            goal_ann = [w.strip().lower() for w in goal_ann]
-            instr_anns = [[w.strip().lower() for w in instr_ann]
-                          for instr_ann in instr_anns]
         else:
             goal_ann = ['<<seg>>']
             instr_anns = [[a['action']] + a['action_high_args']
@@ -59,21 +40,18 @@ class Preprocessor(object):
 
 
         traj['ann'] = {
-            'goal': goal_ann + ['<<goal>>'],
-            'instr': [instr_ann + ['<<instr>>'] for instr_ann in instr_anns],
+            'goal': goal_ann + ' <<goal>>',
+            'instr': [instr_ann + ' <<instr>>' for instr_ann in instr_anns],
             'repeat_idx': r_idx
         }
         if not self.subgoal_ann:
-            traj['ann']['instr'] += [['<<stop>>']]
+            traj['ann']['instr'] += ['<<stop>>']
 
         # convert words to tokens
         if 'num' not in traj:
             traj['num'] = {}
-        traj['num']['lang_goal'] = self.numericalize(
-            self.vocab['word'], traj['ann']['goal'], train=not self.is_test_split)
-        traj['num']['lang_instr'] = [self.numericalize(
-            self.vocab['word'], x, train=not self.is_test_split)
-                                     for x in traj['ann']['instr']]
+        # pre-process instructions
+        return self.encoder_lang.forward(' '.join([traj['ann']['goal'], *traj['ann']['instr']])).cpu()
 
 
     def process_actions(self, ex, traj):
@@ -104,8 +82,7 @@ class Preprocessor(object):
             # low-level action (API commands)
             traj['num']['action_low'][high_idx].append({
                 'high_idx': a['high_idx'],
-                'action': self.vocab['action_low'].word2index(
-                    a['discrete_action']['action'], train=True),
+                'action': self.encoder_lang.translate_to_natural_language(a['discrete_action']['action']),
                 'action_high_args': a['discrete_action']['args'],
             })
 
@@ -135,22 +112,15 @@ class Preprocessor(object):
 
         # low to high idx
         traj['num']['low_to_high_idx'] = low_to_high_idx
-
-        # high-level actions
-        for a in ex['plan']['high_pddl']:
-            a['discrete_action']['args'] = [
-                w.strip().lower() for w in a['discrete_action']['args']]
-            traj['num']['action_high'].append({
-                'high_idx': a['high_idx'],
-                'action': self.vocab['action_high'].word2index(
-                    a['discrete_action']['action'], train=True),
-                'action_high_args': self.numericalize(
-                    self.vocab['action_high'], a['discrete_action']['args']),
-            })
+        
+        # pre-process action embeddings to lmdb
+        lang_action = sum([[a['action'] for a in a_list] for a_list in traj['num']['action_low']], [])
+        lang_action = self.encoder_lang.tokenize(' '.join(lang_action)).ravel()
+        traj['num']['action_low_tokenized'] = lang_action # save tokenized action sequence for GT labels
+        lang_action = self.encoder_lang.embed(lang_action.to(self.device))
 
         # check alignment between step-by-step language and action sequence segments
         action_low_seg_len = len(traj['num']['action_low'])
-        # lang_instr_seg_len = len(traj['num']['lang_instr'])
         if self.subgoal_ann:
             lang_instr_seg_len = len(traj['num']['action_high'])
         else:
@@ -161,6 +131,8 @@ class Preprocessor(object):
         if seg_len_diff != 0:
             assert (seg_len_diff == 1) # sometimes the alignment is off by one  ¯\_(ツ)_/¯
             self.merge_last_two_low_actions(traj)
+            
+        return lang_action
 
     def fix_missing_high_pddl_end_action(self, ex):
         '''

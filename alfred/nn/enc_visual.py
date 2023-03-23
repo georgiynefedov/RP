@@ -6,14 +6,15 @@ import numpy as np
 import torch.nn as nn
 
 from torchvision import models
-from torchvision.transforms import functional as F
+import torchvision.transforms.functional as F
 
 from alfred.gen import constants
 from alfred.nn.transforms import Transforms
 from alfred.utils import data_util
+import clip
 
 
-class Resnet18(nn.Module):
+class CLIPResnet50(nn.Module):
     '''
     pretrained Resnet18 from torchvision
     '''
@@ -23,32 +24,51 @@ class Resnet18(nn.Module):
                  share_memory=False):
         super().__init__()
         self.device = device
-        self.model = models.resnet18(pretrained=True)
-        self.model = nn.Sequential(*list(self.model.children())[:-2])
-        if checkpoint_path is not None:
-            print('Loading ResNet checkpoint from {}'.format(checkpoint_path))
-            model_state_dict = torch.load(checkpoint_path, map_location=device)
-            model_state_dict = {
-                key: value for key, value in model_state_dict.items()
-                if 'GU_' not in key and 'text_pooling' not in key}
-            model_state_dict = {
-                key: value for key, value in model_state_dict.items()
-                if 'fc.' not in key}
-            model_state_dict = {
-                key.replace('resnet.', ''): value
-                for key, value in model_state_dict.items()}
-            self.model.load_state_dict(model_state_dict)
-        self.model = self.model.to(torch.device(device))
+        self.model, self.preprocess = clip.load("RN50", device=device)
+        self.model = nn.Sequential(*list(self.model.visual.children())[:-1])
+        self.model = self.model.to(torch.device(self.device)).float()
+        # freeze CLIP
+        for param in self.model.parameters():
+            param.requires_grad_(False)
         self.model = self.model.eval()
         if share_memory:
             self.model.share_memory()
-        self._transform = Transforms.get_transform('default')
 
-    def extract(self, x):
-        x = self._transform(x).to(torch.device(self.device))
-        return self.model(x)
-
-
+    def extract(self, images):
+        images_normalized = torch.stack(
+                [self.preprocess(img) for img in images]).to(torch.device(self.device))
+        features = self.model(images_normalized)
+        return features
+    
+class Resnet50Bridge(nn.Module):
+    """
+    Bridge network to flatten ResNet50 feats
+    """
+    def __init__(self,
+                 device,
+                 checkpoint_path=None,
+                 share_memory=False):
+        super().__init__()
+        # CLIP Conv to T5 FC bridge
+        self.bridge = nn.Sequential(
+            nn.Conv2d(2048, 1024, 1),
+            nn.Conv2d(1024, 128, 1),
+            nn.Conv2d(128, 32, 1),
+            nn.Flatten(),
+            nn.Linear(1568, 768)
+        )
+        if checkpoint_path is not None:
+            print('Loading CLIP Conv to T5 bridge checkpoint from {}'.format(checkpoint_path))
+            bridge_model_state_dict = torch.load(checkpoint_path, map_location=device)
+            self.bridge.load_state_dict(bridge_model_state_dict)
+        self.bridge = self.bridge.to(torch.device(device)).float()
+        self.bridge = self.bridge.train()
+        if share_memory:
+            self.bridge.share_memory()
+            
+    def forward(self, x):
+        return self.bridge(x)        
+    
 class RCNN(nn.Module):
     '''
     pretrained FasterRCNN or MaskRCNN from torchvision
@@ -86,7 +106,7 @@ class RCNN(nn.Module):
         if checkpoint_path is not None:
             self.load_from_checkpoint(
                 checkpoint_path, load_heads, device, archi, 'backbone.body')
-        self.model = self.model.to(torch.device(device))
+        self.model = self.model.to(torch.device(device)).float()
         self.model = self.model.eval()
         if share_memory:
             self.model.share_memory()
@@ -167,9 +187,10 @@ class FeatureExtractor(nn.Module):
         super().__init__()
         self.feat_shape = data_util.get_feat_shape(archi, compress_type)
         self.eval_mode = True
-        if archi == 'resnet18':
+        # changed 
+        if archi == 'resnet50':
             assert not load_heads
-            self.model = Resnet18(device, checkpoint, share_memory)
+            self.model = CLIPResnet50(device, checkpoint, share_memory)
         else:
             self.model = RCNN(
                 archi, device, checkpoint, share_memory, load_heads=load_heads)
@@ -202,41 +223,3 @@ class FeatureExtractor(nn.Module):
             return
         for module in self.children():
             module.train(mode)
-
-class FeatureFlat(nn.Module):
-    '''
-    a few conv layers to flatten features that come out of ResNet
-    '''
-    def __init__(self, input_shape, output_size):
-        super().__init__()
-        if input_shape[0] == -1:
-            input_shape = input_shape[1:]
-        layers, activation_shape = self.init_cnn(
-            input_shape, channels=[256, 64], kernels=[1, 1], paddings=[0, 0])
-        layers += [
-            Flatten(), nn.Linear(np.prod(activation_shape), output_size)]
-        self.layers = nn.Sequential(*layers)
-
-    def init_cnn(self, input_shape, channels, kernels, paddings):
-        layers = []
-        planes_in, spatial = input_shape[0], input_shape[-1]
-        for planes_out, kernel, padding in zip(channels, kernels, paddings):
-            # do not use striding
-            stride = 1
-            layers += [
-                nn.Conv2d(planes_in, planes_out, kernel_size=kernel,
-                          stride=stride, padding=padding),
-                nn.BatchNorm2d(planes_out), nn.ReLU(inplace=True)]
-            planes_in = planes_out
-            spatial = (spatial - kernel + 2 * padding) // stride + 1
-        activation_shape = (planes_in, spatial, spatial)
-        return layers, activation_shape
-
-    def forward(self, frames):
-        activation = self.layers(frames)
-        return activation
-
-
-class Flatten(nn.Module):
-    def forward(self, x):
-        return x.view(x.size(0), -1)

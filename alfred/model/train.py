@@ -7,7 +7,7 @@ import numpy as np
 from sacred import Experiment
 
 from alfred.config import exp_ingredient, train_ingredient
-from alfred.data import AlfredDataset, SpeakerDataset
+from alfred.data import AlfredDataset
 from alfred.gen import constants
 from alfred.model.learned import LearnedModel
 from alfred.utils import data_util, helper_util, model_util
@@ -37,7 +37,7 @@ def prepare(train, exp):
     random.seed(a=args.seed)
     np.random.seed(args.seed)
     # make output dir
-    print(args)
+    print("args", args)
     if not os.path.isdir(args.dout):
         os.makedirs(args.dout)
     return args
@@ -91,12 +91,7 @@ def load_data(name, args, ann_type, valid_only=False):
     partitions = ([] if valid_only else ['train']) + ['valid_seen', 'valid_unseen']
     datasets = []
     for partition in partitions:
-        if args.model == 'speaker':
-            dataset = SpeakerDataset(name, partition, args, ann_type)
-        elif args.model == 'transformer':
-            dataset = AlfredDataset(name, partition, args, ann_type)
-        else:
-            raise ValueError('Unknown model: {}'.format(args.model))
+        dataset = AlfredDataset(name, partition, args, ann_type)
         datasets.append(dataset)
     return datasets
 
@@ -153,6 +148,7 @@ def main(train, exp):
     '''
     train a network using an lmdb dataset
     '''
+    torch.multiprocessing.set_start_method('spawn')
     # parse args
     args = prepare(train, exp)
     # load dataset(s) and process vocabs

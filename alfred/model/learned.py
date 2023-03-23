@@ -64,6 +64,9 @@ class LearnedModel(nn.Module):
                 key: iter(loader) for key, loader in loaders_train.items()}
             metrics = {key: collections.defaultdict(list) for key in loaders_train}
             gt.reset()
+            
+            # will raise if losses or logits become nan
+            torch.autograd.set_detect_anomaly(True)
 
             for _ in tqdm(range(epoch_length), desc='train'):
                 # sample batches
@@ -75,10 +78,8 @@ class LearnedModel(nn.Module):
                 model_outs, losses_train = {}, {}
                 for batch_name, (traj_data, input_dict, gt_dict) in batches.items():
                     model_outs[batch_name] = self.model.forward(
-                        vocabs_in[batch_name.split(':')[-1]],
-                        action=gt_dict['action'], **input_dict)
-                    info['iters']['train'] += (
-                        len(traj_data) if ':' not in batch_name else 0)
+                        vocabs_in[batch_name.split(':')[-1]], gt_action=gt_dict['gt_action'], **input_dict)
+                    info['iters']['train'] += (len(traj_data) if ':' not in batch_name else 0)
                 gt.stamp('forward pass', unique=False)
                 # compute losses
                 losses_train = self.model.compute_loss(
@@ -95,9 +96,9 @@ class LearnedModel(nn.Module):
 
                 # compute metrics
                 for dataset_name in losses_train.keys():
-                    self.model.compute_metrics(
-                        model_outs[dataset_name], batches[dataset_name][2],
-                        metrics['train:' + dataset_name])
+                    # self.model.compute_metrics(
+                    #     model_outs[dataset_name], batches[dataset_name][2],
+                    #     metrics['train:' + dataset_name])
                     for key, value in losses_train[dataset_name].items():
                         metrics['train:' + dataset_name]['loss/' + key].append(
                             value.item())
@@ -151,17 +152,19 @@ class LearnedModel(nn.Module):
         print('Validating on {}...'.format(name))
         m_valid = collections.defaultdict(list)
         self.eval()
+        self.model.eval()
+        torch.cuda.empty_cache()
         for batch_idx, batch in tqdm(enumerate(loader), desc=name, total=len(loader)):
             traj_data, input_dict, gt_dict = data_util.tensorize_and_pad(
                 batch, self.args.device, self.pad)
             model_out = self.model.forward(
-                vocab_in, action=gt_dict['action'], **input_dict)
+                vocab_in, gt_action=gt_dict['gt_action'], **input_dict)
             loss = self.model.compute_batch_loss(model_out, gt_dict)
             for k, v in loss.items():
                 ln = 'loss/' + k
                 m_valid[ln].append(v.item())
-            self.model.compute_metrics(
-                model_out, gt_dict, m_valid, verbose=(batch_idx == 1))
+            # self.model.compute_metrics(
+            #     model_out, gt_dict, m_valid, verbose=(batch_idx == 1))
             iters_valid[name] += len(traj_data)
             m_valid['loss/total'].append(sum(loss.values()).detach().cpu().item())
         m_valid = {k: sum(v) / len(v) for k, v in m_valid.items()}

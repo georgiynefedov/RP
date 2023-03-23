@@ -30,19 +30,19 @@ def cfg_args():
     # whether to overwrite old data in case it exists
     overwrite = False
     # number of processes to run the data processing in (0 for main thread)
-    num_workers = 4
+    num_workers = 8
     # debug run with only 16 entries
     fast_epoch = False
 
     # VISUAL FEATURES SETTINGS
-    # visual archi (resnet18, fasterrcnn, maskrcnn)
-    visual_archi = 'fasterrcnn'
+    # visual archi (resnet50, fasterrcnn, maskrcnn)
+    visual_archi = 'resnet50'
     # where to load a pretrained model from
     visual_checkpoint = None
     # which images to use (by default: RGBs)
     image_folder = 'raw_images'
     # feature compression
-    compress_type = '4x'
+    compress_type = None #'4x'
     # which device to use
     device = 'cuda'
 
@@ -86,6 +86,8 @@ def process_jsons(traj_paths, preprocessor, lock, save_path):
     save_path.mkdir(exist_ok=True)
     (save_path / 'masks').mkdir(exist_ok=True)
     (save_path / 'jsons').mkdir(exist_ok=True)
+    (save_path / 'actions').mkdir(exist_ok=True)
+    (save_path / 'instrs').mkdir(exist_ok=True)
     if str(save_path).endswith('/worker00'):
         with lock:
             progressbar = ProgressBar(max_value=len(traj_paths))
@@ -111,8 +113,11 @@ def process_jsons(traj_paths, preprocessor, lock, save_path):
             masks = data_util.process_masks(traj_orig)
         trajs = []
         for r_idx in range(num_annotations):
-            traj_proc = data_util.process_traj(
+            traj_proc, actions, instr = data_util.process_traj(
                 copy.deepcopy(traj_orig), traj_path, r_idx, preprocessor)
+            # save pre-processed actions and instructions
+            torch.save(actions.cpu(), save_path / 'actions' / '{}:{}:{}.pt'.format(*[traj_path.parents[i].name for i in (2, 1, 0)]))
+            torch.save(instr, save_path / 'instrs' / '{}:{}:{}.pt'.format(*[traj_path.parents[i].name for i in (2, 1, 0)]))
             trajs.append(traj_proc)
         # save masks and traj jsons
         filename = '{}:{}:{}.pkl'.format(*[traj_path.parents[i].name for i in (2, 1, 0)])
@@ -145,7 +150,7 @@ def get_traj_paths(input_path, processed_files_path, fast_epoch):
             str(path) for path in input_path.glob('*/*/*/traj_data.json')])
         traj_paths = [path for path in traj_paths_all if 'tests_' not in path]
     if fast_epoch:
-        traj_paths = traj_paths[::20]
+        traj_paths = traj_paths[::250]
     num_files = len(traj_paths)
     if processed_files_path is not None and processed_files_path.exists():
         if str(processed_files_path).endswith(constants.VOCAB_FILENAME):
@@ -179,11 +184,11 @@ def run_in_parallel(func, num_workers, output_path, args, use_processes=False):
 
 def gather_data(output_path, num_workers):
     print('Start gathering data')
-    for dirname in ('feats', 'masks', 'jsons'):
+    for dirname in ('feats', 'masks', 'jsons', 'actions', 'instrs'):
         if (output_path / dirname).is_dir():
             shutil.rmtree(output_path / dirname)
         (output_path / dirname).mkdir()
-    for dirname in ('feats', 'masks', 'jsons'):
+    for dirname in ('feats', 'masks', 'jsons', 'actions', 'instrs'):
         for path_file in output_path.glob('worker*/{}/*'.format(dirname)):
             if path_file.stat().st_size == 0:
                 continue
@@ -211,17 +216,21 @@ def gather_data(output_path, num_workers):
                            for p in feats_files]
             jsons_files = [p.replace('/feats/', '/jsons/').replace('.pt', '.pkl')
                            for p in feats_files]
+            action_files = [p.replace('/feats/', '/actions/') for p in feats_files]
+            instr_files = [p.replace('/feats/', '/instrs/') for p in feats_files]            
             (output_path / partition).mkdir(exist_ok=True)
             data_util.gather_feats(feats_files, output_path / partition / 'feats')
             data_util.gather_masks(masks_files, output_path / partition / 'masks')
             data_util.gather_jsons(jsons_files, output_path / partition / 'jsons.pkl')
+            data_util.gather_feats(action_files, output_path / partition / 'actions')
+            data_util.gather_feats(instr_files, output_path / partition / 'instrs')
 
     print('Removing worker directories')
     (output_path / '.deleting_worker_dirs').touch()
     for worker_idx in range(max(num_workers, 1)):
         worker_dir = output_path / 'worker{:02d}'.format(worker_idx)
         shutil.rmtree(worker_dir)
-    for dirname in ('feats', 'masks', 'jsons'):
+    for dirname in ('feats', 'masks', 'jsons', 'actions', 'instrs'):
         shutil.rmtree(output_path / dirname)
     os.remove(output_path / '.deleting_worker_dirs')
     os.remove(output_path / 'processed_feats.txt')
