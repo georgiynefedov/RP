@@ -40,10 +40,8 @@ class BaseDataset(TorchDataset):
         # load vocabularies for input language and output actions
         vocab = data_util.load_vocab(name, ann_type)
         self.vocab_in = vocab['word']
-        out_type = 'action_low' if args.model == 'transformer' else 'action_high'
+        out_type = 'action_low'
         self.vocab_out = vocab[out_type]
-        # if several datasets are used, we will translate outputs to this vocab later
-        self.vocab_translate = None
 
     def load_data(self, path, feats=True, masks=True, jsons=True):
         '''
@@ -54,8 +52,19 @@ class BaseDataset(TorchDataset):
             self.feats_lmdb_path = os.path.join(path, self.partition, 'feats')
         if masks:
             self.masks_lmdb_path = os.path.join(path, self.partition, 'masks')
+        self.actions_lmdb_path = os.path.join(path, self.partition, 'actions')
+        self.instrs_lmdb_path = os.path.join(path, self.partition, 'instrs')
 
         # load jsons with pickle and parse them
+        d_length = 0 # d_length is the length of the dataset
+        # offsets is a map from new dataset indices to original indices
+        # e.g. {
+            # 0: 0, 
+            # 7: 1, 
+            # 18: 2,
+            #...
+        # }
+        self.offsets = {0: 0} 
         if jsons:
             with open(os.path.join(
                     path, self.partition, 'jsons.pkl'), 'rb') as jsons_file:
@@ -73,28 +82,30 @@ class BaseDataset(TorchDataset):
                     # add dataset idx and partition into the json
                     json['dataset_name'] = self.name
                     self.jsons_and_keys.append((json, key))
+                    d_length += len(json['num']['low_to_high_idx'])
+                    self.offsets[d_length] = idx + 1
                     # if the dataset has script annotations, do not add identical data
                     if len(set([str(j['ann']['instr']) for j in task_jsons])) == 1:
                         break
 
         # return the true length of the loaded data
-        return len(self.jsons_and_keys) if jsons else None
+        return d_length if jsons else None     
 
-    def load_frames(self, key):
+    def load_frames(self, key, offset):
         '''
         load image features from the disk
+        @offset: the number of frames to load from sequence @key
         '''
         if not hasattr(self, 'feats_lmdb'):
-            self.feats_lmdb, self.feats = self.load_lmdb(
-                self.feats_lmdb_path)
+            self.feats_lmdb, self.feats = self.load_lmdb(self.feats_lmdb_path)
         feats_bytes = self.feats.get(key)
-        feats_numpy = np.frombuffer(
-            feats_bytes, dtype=np.float32).reshape(self.dataset_info['feat_shape'])
+        feats_numpy = np.frombuffer(feats_bytes, dtype=np.float32)
+        feats_numpy = feats_numpy.reshape(self.dataset_info['feat_shape'])
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             frames = torch.tensor(feats_numpy)
-        return frames
-
+        return frames[:offset+1]
+    
     def load_lmdb(self, lmdb_path):
         '''
         load lmdb (should be executed in each worker on demand)

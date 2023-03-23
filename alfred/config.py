@@ -19,11 +19,11 @@ def cfg_exp():
     # which device to use
     device = 'cuda'
     # number of data loading workers or evaluation processes (0 for main thread)
-    num_workers = 12
+    num_workers = 0
     # we can fine-tune a pre-trained model
     pretrained_path = None
     # run the code on a small chunk of data
-    fast_epoch = False
+    fast_epoch = True
 
     # DATA SETTINGS
     data = {
@@ -83,7 +83,7 @@ def cfg_train():
 
     # HYPER PARAMETERS
     # batch size
-    batch = 8
+    batch = 16
     # number of epochs
     epochs = 20
     # optimizer type, must be in ('adam', 'adamw')
@@ -149,31 +149,3 @@ def cfg_train():
     # do not propagate gradients to the look-up table and the language encoder
     detach_lang_emb = False
 
-    # DROPOUTS
-    dropout = {
-        # dropout rate for language (goal + instr)
-        'lang': 0.0,
-        # dropout rate for Resnet feats
-        'vis': 0.3,
-        # dropout rate for processed lang and visual embeddings
-        'emb': 0.0,
-        # transformer model specific dropouts
-        'transformer': {
-            # dropout for transformer encoder
-            'encoder': 0.1,
-            # remove previous actions
-            'action': 0.0,
-        },
-    }
-
-    # ENCODINGS
-    enc = {
-        # use positional encoding
-        'pos': True,
-        # use learned positional encoding
-        'pos_learn': False,
-        # use learned token ([WORD] or [IMG]) encoding
-        'token': False,
-        # dataset id learned encoding
-        'dataset': False,
-    }

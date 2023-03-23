@@ -261,7 +261,7 @@ def generate_attention_mask(len_lang, len_frames, device, num_input_actions=0):
 
 
 def process_prediction(
-        action, objects, pad, vocab_action, clean_special_tokens, predict_object=True):
+        action, pad, vocab_action, clean_special_tokens, predict_object=True):
     '''
     process a single trajectory, return it as a dict
     '''
@@ -269,21 +269,16 @@ def process_prediction(
     if pad in action:
         pad_start_idx = action.index(pad)
         action = action[:pad_start_idx]
-        objects = objects[:pad_start_idx]
     if clean_special_tokens:
         # remove <<stop>> tokens
         stop_token = vocab_action.word2index('<<stop>>')
         if stop_token in action:
             stop_start_idx = action.index(stop_token)
             action = action[:stop_start_idx]
-            objects = objects[:stop_start_idx]
     # index to API actions
     words = vocab_action.index2word(action)
 
-    if predict_object:
-        pred_object = objects[None].max(2)[1].cpu().numpy()
-    else:
-        pred_object = None
+    pred_object = None
     pred_processed = {
         'action': ' '.join(words),
         'object': pred_object,
@@ -296,12 +291,12 @@ def extract_action_preds(
     '''
     output processing for a VLN agent
     '''
-    zipped_data = zip(model_out['action'].max(2)[1].tolist(), model_out['object'])
+    actions = model_out['action'].max(2)[1].tolist()
     predict_object = not lang_only
     preds_list = [
         process_prediction(
-            action, objects, pad, vocab_action, clean_special_tokens, predict_object)
-        for action, objects in zipped_data]
+            action, pad, vocab_action, clean_special_tokens, predict_object)
+        for action in actions]
     return preds_list
 
 

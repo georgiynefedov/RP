@@ -35,7 +35,7 @@ def cfg_args():
     # whether to shuffle the order of augmenting
     shuffle = False
     # number of threads to start in parallel
-    num_threads = 8
+    num_threads = 4
     # frame size to render
     render_size = 300
     # X server number

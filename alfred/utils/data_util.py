@@ -61,7 +61,7 @@ def read_traj_images(json_path, image_folder):
 def extract_features(images, extractor):
     if images is None:
         return None
-    feat = extractor.featurize(images, batch=8)
+    feat = extractor.featurize(images, batch=8).type(torch.float32)
     return feat.cpu()
 
 
@@ -117,10 +117,10 @@ def process_traj(traj_orig, traj_path, r_idx, preprocessor):
     traj['repeat_idx'] = r_idx
     # numericalize actions for train/valid splits
     if 'test' not in partition: # expert actions are not available for the test set
-        preprocessor.process_actions(traj_orig, traj)
+        actions = preprocessor.process_actions(traj_orig, traj)
     # numericalize language
-    preprocessor.process_language(traj_orig, traj, r_idx)
-    return traj
+    instr = preprocessor.process_language(traj_orig, traj, r_idx)
+    return traj, actions, instr
 
 
 def gather_feats(files, output_path):
@@ -128,10 +128,12 @@ def gather_feats(files, output_path):
     if output_path.is_dir():
         shutil.rmtree(output_path)
     lmdb_feats = lmdb.open(str(output_path), 700*1024**3, writemap=True)
+    # os.makedirs(output_path / 'pickle', exist_ok=True) # for debugging
     with lmdb_feats.begin(write=True) as txn_feats:
         for idx, path in tqdm(enumerate(files)):
             traj_feats = torch.load(path).numpy()
             txn_feats.put('{:06}'.format(idx).encode('ascii'), traj_feats.tobytes())
+            # torch.save(torch.load(path), output_path / 'pickle' / '{:06}.pkl'.format(idx))
     lmdb_feats.close()
 
 
@@ -197,14 +199,14 @@ def tensorize_and_pad(batch, device, pad):
     # check that all samples come from the same dataset
     assert len(set([t['dataset_name'] for t in traj_data])) == 1
     # feat_dict keys that start with these substrings will be assigned to input_dict
-    input_keys = {'lang', 'frames'}
+    input_keys = {'lang', 'frames', 'action'}
     # the rest of the keys will be assigned to gt_dict
 
     for k, v in feat_dict.items():
         dict_assign = input_dict if any([k.startswith(s) for s in input_keys]) else gt_dict
         if k.startswith('lang'):
-            # no preprocessing should be done here
-            seqs = [torch.tensor(vv if vv is not None else [pad, pad], device=device).long() for vv in v]
+            seqs = v
+            seqs = [s[0] for s in seqs]
             pad_seq = pad_sequence(seqs, batch_first=True, padding_value=pad)
             dict_assign[k] = pad_seq
             dict_assign['lengths_' + k] = torch.tensor(list(map(len, seqs)))
@@ -232,9 +234,12 @@ def tensorize_and_pad(batch, device, pad):
             dict_assign['length_' + k + '_max'] = max(map(len, seqs))
         else:
             # default: tensorize and pad sequence
-            seqs = [torch.tensor(vv, device=device, dtype=torch.long) for vv in v]
+            seqs = v
+            if not isinstance(v[0], torch.Tensor):
+                seqs = [torch.tensor(vv, device=device, dtype=torch.long) for vv in seqs]
             pad_seq = pad_sequence(seqs, batch_first=True, padding_value=pad)
             dict_assign[k] = pad_seq
+            dict_assign['lengths_' + k] = torch.tensor(list(map(len, seqs)))
     return traj_data, input_dict, gt_dict
 
 
@@ -249,8 +254,7 @@ def sample_batches(iterators, device, pad, args):
         except StopIteration as e:
             return None
         dataset_name = dataset_id.split(':')[1]
-        traj_data, input_dict, gt_dict = tensorize_and_pad(
-            batches, device, pad)
+        traj_data, input_dict, gt_dict = tensorize_and_pad(batches, device, pad)
         batches_dict[dataset_name] = (traj_data, input_dict, gt_dict)
     return batches_dict
 
@@ -278,8 +282,8 @@ def get_feat_shape(visual_archi, compress_type=None):
     elif visual_archi == 'maskrcnn':
         # the RCNN model should be trained with min_size=800
         feat_shape = (-1, 2048, 10, 10)
-    elif visual_archi == 'resnet18':
-        feat_shape = (-1, 512, 7, 7)
+    elif visual_archi == 'resnet50':
+        feat_shape = (-1, 2048, 7, 7)
     else:
         raise NotImplementedError('Unknown archi {}'.format(visual_archi))
 
