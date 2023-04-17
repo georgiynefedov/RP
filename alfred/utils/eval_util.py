@@ -348,7 +348,6 @@ def load_expert_actions(dataset, task, dataset_key, subgoal_idx):
     expert_dict['actions'] = [
         a['discrete_action'] for a in task['plan']['low_actions']
         if a['high_idx'] < subgoal_idx]
-    expert_dict['masks'] = dataset.load_masks(dataset_key)
     return expert_dict
 
 

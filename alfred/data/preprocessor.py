@@ -82,7 +82,7 @@ class Preprocessor(object):
             # low-level action (API commands)
             traj['num']['action_low'][high_idx].append({
                 'high_idx': a['high_idx'],
-                'action': self.encoder_lang.translate_to_natural_language(a['discrete_action']['action']),
+                'action': a['discrete_action']['action'],
                 'action_high_args': a['discrete_action']['args'],
             })
 
@@ -113,11 +113,15 @@ class Preprocessor(object):
         # low to high idx
         traj['num']['low_to_high_idx'] = low_to_high_idx
         
-        # pre-process action embeddings to lmdb
-        lang_action = sum([[a['action'] for a in a_list] for a_list in traj['num']['action_low']], [])
-        lang_action = self.encoder_lang.tokenize(' '.join(lang_action)).ravel()
-        traj['num']['action_low_tokenized'] = lang_action # save tokenized action sequence for GT labels
-        lang_action = self.encoder_lang.embed(lang_action.to(self.device))
+        # high-level actions
+        for a in ex['plan']['high_pddl']:
+            a['discrete_action']['args'] = [
+                w.strip().lower() for w in a['discrete_action']['args']]
+            traj['num']['action_high'].append({
+                'high_idx': a['high_idx'],
+                'action': a['discrete_action']['action'],
+                'action_high_args': a['discrete_action']['args'],
+            })
 
         # check alignment between step-by-step language and action sequence segments
         action_low_seg_len = len(traj['num']['action_low'])
@@ -131,8 +135,6 @@ class Preprocessor(object):
         if seg_len_diff != 0:
             assert (seg_len_diff == 1) # sometimes the alignment is off by one  ¯\_(ツ)_/¯
             self.merge_last_two_low_actions(traj)
-            
-        return lang_action
 
     def fix_missing_high_pddl_end_action(self, ex):
         '''

@@ -20,6 +20,69 @@ from pathlib import Path
 from alfred.gen import constants
 from alfred.gen.utils import image_util
 from alfred.utils import helper_util, model_util
+import re
+
+# from summact
+places_that_take_in = set(('sinkbasin', 'bathtubbasin', 'cabinet', 'fridge', 'garbagecan', 'microwave', 'drawer'))
+pddl_to_nl = {
+    'gotolocation':'go to the',
+	'pickupobject':'pick up the',
+	'putobject':'put the',
+	'coolobject':'cool the',
+	'heatobject':'heat the',
+	'cleanobject':'clean the',
+	'toggleobject':'toggle the',
+	'sliceobject':'slice the',
+	'diningtable':'dining table',
+	'sinkbasin':'sink basin',
+	'sidetable':'side table',
+	'butterknife':'butter knife',
+	'garbagecan':'garbage can',
+	'tissuebox':'tissue box',
+	'desklamp':'desk lamp',
+	'winebottle':'wine bottle',
+	'coffeetable':'coffee table',
+	'spraybottle':'spray bottle',
+	'floorlamp':'floor lamp',
+	'alarmclock':'alarm clock',
+	'remotecontrol':'remote control',
+	'coffeemachine':'coffee machine',
+	'toiletpaper':'toilet paper',
+	'toiletpaperhanger':'toilet paper hanger',
+	'creditcard':'credit card',
+	'stoveburner':'stove burner',
+	'handtowelholder':'hand towel holder',
+	'handtowel':'hand towel',
+	'bathtubbasin':'bathtub basin',
+	'soapbar':'soap bar',
+	'tennisracket':'tennis racket',
+	'soapbottle':'soap bottle',
+	'glassbottle':'glass bottle',
+	'dishsponge':'dish sponge',
+	'wateringcan':'watering can',
+	'baseballbat':'baseball bat',
+	'saltshaker':'salt shaker',
+	'peppershaker':'pepper shaker',
+	'stoveknob':'stove knob',
+	'showercurtain':'shower curtain',
+	'tomatosliced':'sliced tomato',
+	'wateringcan':'watering can',
+	'potatosliced':'sliced potato',
+	'breadsliced':'sliced bread',
+	'applesliced':'sliced apple',
+	'lettucesliced':'sliced lettuce',
+	'eggcracked':'cracked egg',
+	'laundryhamper':'laundry hamper',
+	'laundryhamperlid':'laundry hamper lid',
+	'tvstand':'tv stand',
+	'footstool':'foot stool',
+	'showerhead':'shower head',
+	'showerdoor':'shower door',
+	'showerglass':'shower glass',
+	'scrubbrush':'scrub brush',
+	'lightswitch':'light switch',
+	'towlholder':'towel holder'
+}
 
 
 def read_images(image_path_list):
@@ -29,6 +92,33 @@ def read_images(image_path_list):
         images.append(image_orig.copy())
         image_orig.close()
     return images
+
+# from summact
+def translate_pddl_to_english(pddl):
+    new_text= []
+    i = 0
+    while i < len(pddl):
+        w = pddl[i]
+        if w in pddl_to_nl:
+            new_text.append(pddl_to_nl[w])
+            if w == 'putobject':
+                i += 1
+                w = pddl[i]
+                if w in pddl_to_nl:
+                    new_text.append(pddl_to_nl[w])
+                else:
+                    new_text.append(w)
+                if pddl[i+1] in places_that_take_in:
+                    new_text.append('in')
+                else:
+                    new_text.append('on')
+                new_text.append('the')
+        else:
+            new_text.append(w)
+        i += 1
+    new_text_to_return = " ".join(new_text)
+    new_text_to_return = re.sub(" , ", ", ", new_text_to_return)
+    return new_text_to_return
 
 
 def read_traj_images(json_path, image_folder):
@@ -117,10 +207,10 @@ def process_traj(traj_orig, traj_path, r_idx, preprocessor):
     traj['repeat_idx'] = r_idx
     # numericalize actions for train/valid splits
     if 'test' not in partition: # expert actions are not available for the test set
-        actions = preprocessor.process_actions(traj_orig, traj)
+        preprocessor.process_actions(traj_orig, traj)
     # numericalize language
     instr = preprocessor.process_language(traj_orig, traj, r_idx)
-    return traj, actions, instr
+    return traj, instr
 
 
 def gather_feats(files, output_path):
@@ -128,12 +218,12 @@ def gather_feats(files, output_path):
     if output_path.is_dir():
         shutil.rmtree(output_path)
     lmdb_feats = lmdb.open(str(output_path), 700*1024**3, writemap=True)
-    # os.makedirs(output_path / 'pickle', exist_ok=True) # for debugging
+    os.makedirs(output_path / 'pickle', exist_ok=True) # for debugging
     with lmdb_feats.begin(write=True) as txn_feats:
         for idx, path in tqdm(enumerate(files)):
             traj_feats = torch.load(path).numpy()
             txn_feats.put('{:06}'.format(idx).encode('ascii'), traj_feats.tobytes())
-            # torch.save(torch.load(path), output_path / 'pickle' / '{:06}.pkl'.format(idx))
+            torch.save(torch.load(path), output_path / 'pickle' / '{:06}.pkl'.format(idx))
     lmdb_feats.close()
 
 
@@ -203,6 +293,8 @@ def tensorize_and_pad(batch, device, pad):
     # the rest of the keys will be assigned to gt_dict
 
     for k, v in feat_dict.items():
+        if any([k.startswith(s) for s in input_keys]):
+            continue
         dict_assign = input_dict if any([k.startswith(s) for s in input_keys]) else gt_dict
         if k.startswith('lang'):
             seqs = v
@@ -220,11 +312,6 @@ def tensorize_and_pad(batch, device, pad):
             seqs = [torch.tensor(vv, device=device, dtype=torch.long)
                     for vv in v if len(vv) > 0]
             dict_assign[k] = seqs
-        elif k in {'goal_progress', 'subgoals_completed'}:
-            # auxillary padding
-            seqs = [torch.tensor(vv, device=device, dtype=torch.float) for vv in v]
-            pad_seq = pad_sequence(seqs, batch_first=True, padding_value=pad)
-            dict_assign[k] = pad_seq
         elif k in {'frames'}:
             # frames features were loaded from the disk as tensors
             seqs = [vv.clone().detach().to(device).type(torch.float) for vv in v]
@@ -237,6 +324,7 @@ def tensorize_and_pad(batch, device, pad):
             seqs = v
             if not isinstance(v[0], torch.Tensor):
                 seqs = [torch.tensor(vv, device=device, dtype=torch.long) for vv in seqs]
+            # print(k, [(s.shape, s.dtype) for s in seqs])
             pad_seq = pad_sequence(seqs, batch_first=True, padding_value=pad)
             dict_assign[k] = pad_seq
             dict_assign['lengths_' + k] = torch.tensor(list(map(len, seqs)))

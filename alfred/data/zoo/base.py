@@ -33,8 +33,8 @@ class BaseDataset(TorchDataset):
 
         # load data
         self._length = self.load_data(path)
-        if self.args.fast_epoch:
-            self._length = 16
+        # if self.args.fast_epoch:
+        #     self._length = 16
         print('{} dataset size = {}'.format(partition, self._length))
 
         # load vocabularies for input language and output actions
@@ -47,11 +47,7 @@ class BaseDataset(TorchDataset):
         '''
         load data
         '''
-        # do not open the lmdb database open in the main process, do it in each thread
-        if feats:
-            self.feats_lmdb_path = os.path.join(path, self.partition, 'feats')
-        if masks:
-            self.masks_lmdb_path = os.path.join(path, self.partition, 'masks')
+        self.feats_lmdb_path = os.path.join(path, self.partition, 'feats')
         self.actions_lmdb_path = os.path.join(path, self.partition, 'actions')
         self.instrs_lmdb_path = os.path.join(path, self.partition, 'instrs')
 
@@ -82,7 +78,7 @@ class BaseDataset(TorchDataset):
                     # add dataset idx and partition into the json
                     json['dataset_name'] = self.name
                     self.jsons_and_keys.append((json, key))
-                    d_length += len(json['num']['low_to_high_idx'])
+                    d_length += len(set(json['num']['low_to_high_idx']))
                     self.offsets[d_length] = idx + 1
                     # if the dataset has script annotations, do not add identical data
                     if len(set([str(j['ann']['instr']) for j in task_jsons])) == 1:
@@ -91,7 +87,7 @@ class BaseDataset(TorchDataset):
         # return the true length of the loaded data
         return d_length if jsons else None     
 
-    def load_frames(self, key, offset):
+    def load_frames(self, key, timestep, task_json):
         '''
         load image features from the disk
         @offset: the number of frames to load from sequence @key
@@ -104,7 +100,7 @@ class BaseDataset(TorchDataset):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             frames = torch.tensor(feats_numpy)
-        return frames[:offset+1]
+        return frames[:sum([1 if idx <= timestep else 0 for idx in task_json['num']['low_to_high_idx']]) + 1]
     
     def load_lmdb(self, lmdb_path):
         '''

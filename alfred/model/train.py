@@ -113,7 +113,7 @@ def wrap_datasets(datasets, args):
     for dataset in datasets:
         if dataset.partition == 'train':
             weights = [1 / len(dataset)] * len(dataset)
-            num_samples = 16 if args.fast_epoch else (
+            num_samples = 800 if args.fast_epoch else (
                 args.data['length'] or len(dataset))
             num_samples = num_samples // len(args.data['train'])
             sampler = torch.utils.data.WeightedRandomSampler(

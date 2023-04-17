@@ -3,29 +3,6 @@ from torch import nn
 from transformers import T5Tokenizer, T5ForConditionalGeneration
 
 
-# changed
-actions_vocab ={
-    '<<pad>>': '<pad>',
-    '<<seg>>': '<seg>',
-    '<<goal>>': '<goal>',
-    '<<mask>>': '<mask>',
-    'LookDown_15': 'look down',
-    'RotateLeft_90': 'rotate left',
-    'MoveAhead_25': 'move ahead',
-    'RotateRight_90': 'rotate right',
-    'PickupObject': 'pickup',
-    'PutObject': 'put',
-    'LookUp_15': 'look up',
-    '<<stop>>': 'stop',
-    'SliceObject': 'slice',
-    'OpenObject': 'open',
-    'CloseObject': 'close',
-    'ToggleObjectOn': 'toggle on',
-    'ToggleObjectOff': 'toggle off'
-}
-actions_set = set(actions_vocab.values())
-
-
 class EncoderLang(nn.Module):
     def __init__(self, device=torch.device('cuda')):
         '''
@@ -43,9 +20,6 @@ class EncoderLang(nn.Module):
     def forward(self, x, vocab=None):
         toks = self.tokenize(x, vocab).to(self.device)
         return self.embed(toks)
-        
-    def translate_to_natural_language(self, action):
-        return actions_vocab[action]
     
     def tokenize(self, tok, vocab=None):
         if vocab != None:
