@@ -293,8 +293,6 @@ def tensorize_and_pad(batch, device, pad):
     # the rest of the keys will be assigned to gt_dict
 
     for k, v in feat_dict.items():
-        if any([k.startswith(s) for s in input_keys]):
-            continue
         dict_assign = input_dict if any([k.startswith(s) for s in input_keys]) else gt_dict
         if k.startswith('lang'):
             seqs = v
