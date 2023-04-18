@@ -18,7 +18,9 @@ class Model(base.Model):
         # encoder and visual embeddings
         self.encoder_vl = EncoderVL(args)
         # feature embeddings
-        self.vis_feat = Resnet50Bridge(args.device)
+        self.bridge = Resnet50Bridge(args.device)
+        # language embeddings
+        self.encoder_lang = EncoderLang(args.device)
         
         # final touch
         self.reset()
@@ -27,31 +29,8 @@ class Model(base.Model):
         '''
         forward the model for multiple time-steps (used for training)
         '''
-        # embed language
-        lengths_lang = inputs['lengths_lang']
-        emb_lang = inputs['lang']
-
-        # embed frames and actions
-        emb_frames = self.embed_frames(inputs['frames'])
-        lengths_frames = inputs['lengths_frames']
-        emb_actions = inputs['action']
-        lengths_action = inputs['lengths_action']
-        length_frames_max = inputs['length_frames_max']
-
-        # concatenate language, frames and actions and add encodings
-        output = self.encoder_vl(
-            emb_lang, emb_frames, emb_actions, lengths_lang,
-            lengths_frames, lengths_action, length_frames_max, inputs['gt_action'])
+        output = self.encoder_vl(inputs['input'], inputs['input_mask'], inputs['gt_action'])
         return output
-
-    def embed_frames(self, frames_pad):
-        '''
-        take a list of frames tensors, pad it, apply dropout and extract embeddings
-        '''
-        frames_4d = frames_pad.view(-1, *frames_pad.shape[2:])
-        frames_pad_emb = self.vis_feat(frames_4d).view(
-            *frames_pad.shape[:2], -1)
-        return frames_pad_emb
 
     def reset(self):
         '''

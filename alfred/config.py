@@ -23,7 +23,7 @@ def cfg_exp():
     # we can fine-tune a pre-trained model
     pretrained_path = None
     # run the code on a small chunk of data
-    fast_epoch = True
+    fast_epoch = False
 
     # DATA SETTINGS
     data = {

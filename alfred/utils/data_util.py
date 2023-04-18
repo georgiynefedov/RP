@@ -276,60 +276,54 @@ def get_preprocessor(PreprocessorClass, subgoal_ann, lock, vocab_path=None):
     preprocessor = PreprocessorClass(vocabs_with_lock, subgoal_ann)
     return preprocessor
 
+def get_input_embedding(feat_list, pad, bridge, device, encoder_lang):
+    '''
+    Concatenate and pad input features in the following format:
+    <instruction embedding> images: <image embeddings> actions: <action history embedding> <eos>
+    '''
+    def embed_input(x):
+        '''
+        embed a single input
+        '''
+        x['lang'] = torch.squeeze(x['lang'])[:-1] # squeeze and remove last token <eos>
+        x['frames'] = bridge(x['frames'].to(device)).to(device)
+        images_prefix_embeds = torch.squeeze(encoder_lang.forward('images:'))[:-1] # remove last token <eos>
+        actions_prefix_embeds = torch.squeeze(encoder_lang.forward('actions:'))[:-1] # remove last token <eos>
+        x = torch.cat([x['lang'], images_prefix_embeds, x['frames'], actions_prefix_embeds, x['action']], dim=0).to(device)
+        return x
+    
+    embeds = [embed_input(x) for x in feat_list]
+    input = pad_sequence(embeds, padding_value=pad, batch_first=True)
+    input_mask = torch.ones(input.shape[:-1], dtype=torch.bool, device=device)
+    for i in range(len(embeds)):
+        input_mask[i, len(embeds[i]):] = False
+    
+    return {
+        'input': input,
+        'input_mask': input_mask
+    }
 
-def tensorize_and_pad(batch, device, pad):
+def tensorize_and_pad(batch, device, pad, bridge, encoder_lang):
     '''
     cast values to torch tensors, put them to the correct device and pad sequences
     '''
     device = torch.device(device)
-    input_dict, gt_dict, feat_dict = dict(), dict(), dict()
     traj_data, feat_list = list(zip(*batch))
+    input_dict, gt_dict, feat_dict = get_input_embedding(feat_list, pad, bridge, device, encoder_lang), dict(), dict()
     for key in feat_list[0].keys():
         feat_dict[key] = [el[key] for el in feat_list]
     # check that all samples come from the same dataset
     assert len(set([t['dataset_name'] for t in traj_data])) == 1
-    # feat_dict keys that start with these substrings will be assigned to input_dict
-    input_keys = {'lang', 'frames', 'action'}
-    # the rest of the keys will be assigned to gt_dict
-
-    for k, v in feat_dict.items():
-        dict_assign = input_dict if any([k.startswith(s) for s in input_keys]) else gt_dict
-        if k.startswith('lang'):
-            seqs = v
-            seqs = [s[0] for s in seqs]
-            pad_seq = pad_sequence(seqs, batch_first=True, padding_value=pad)
-            dict_assign[k] = pad_seq
-            dict_assign['lengths_' + k] = torch.tensor(list(map(len, seqs)))
-            length_max_key = 'length_' + k + '_max'
-            if ':' in k:
-                # for translated length keys (e.g. lang:lmdb/1x_det) we should use different names
-                length_max_key = 'length_' + k.split(':')[0] + '_max:' + ':'.join(k.split(':')[1:])
-            dict_assign[length_max_key] = max(map(len, seqs))
-        elif k in {'object'}:
-            # convert lists with object indices to tensors
-            seqs = [torch.tensor(vv, device=device, dtype=torch.long)
-                    for vv in v if len(vv) > 0]
-            dict_assign[k] = seqs
-        elif k in {'frames'}:
-            # frames features were loaded from the disk as tensors
-            seqs = [vv.clone().detach().to(device).type(torch.float) for vv in v]
-            pad_seq = pad_sequence(seqs, batch_first=True, padding_value=pad)
-            dict_assign[k] = pad_seq
-            dict_assign['lengths_' + k] = torch.tensor(list(map(len, seqs)))
-            dict_assign['length_' + k + '_max'] = max(map(len, seqs))
-        else:
-            # default: tensorize and pad sequence
-            seqs = v
-            if not isinstance(v[0], torch.Tensor):
-                seqs = [torch.tensor(vv, device=device, dtype=torch.long) for vv in seqs]
-            # print(k, [(s.shape, s.dtype) for s in seqs])
-            pad_seq = pad_sequence(seqs, batch_first=True, padding_value=pad)
-            dict_assign[k] = pad_seq
-            dict_assign['lengths_' + k] = torch.tensor(list(map(len, seqs)))
+    
+    k = 'gt_action'
+    v = feat_dict['gt_action']
+    seqs = v if isinstance(v[0], torch.Tensor) else [torch.tensor(vv, device=device, dtype=torch.long) for vv in v]
+    gt_dict[k] = pad_sequence(seqs, batch_first=True, padding_value=pad)
+    
     return traj_data, input_dict, gt_dict
 
 
-def sample_batches(iterators, device, pad, args):
+def sample_batches(iterators, device, pad, args, bridge, encoder_lang):
     '''
     sample a batch from each iterator, return Nones if the iterator is empty
     '''
@@ -340,7 +334,7 @@ def sample_batches(iterators, device, pad, args):
         except StopIteration as e:
             return None
         dataset_name = dataset_id.split(':')[1]
-        traj_data, input_dict, gt_dict = tensorize_and_pad(batches, device, pad)
+        traj_data, input_dict, gt_dict = tensorize_and_pad(batches, device, pad, bridge, encoder_lang)
         batches_dict[dataset_name] = (traj_data, input_dict, gt_dict)
     return batches_dict
 

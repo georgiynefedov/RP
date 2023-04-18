@@ -71,7 +71,7 @@ class LearnedModel(nn.Module):
             for _ in tqdm(range(epoch_length), desc='train'):
                 # sample batches
                 batches = data_util.sample_batches(
-                    train_iterators, self.args.device, self.pad, self.args)
+                    train_iterators, self.args.device, self.pad, self.args, self.model.bridge, self.model.encoder_lang)
                 gt.stamp('data fetching', unique=False)
 
                 # do the forward passes
@@ -156,7 +156,7 @@ class LearnedModel(nn.Module):
         torch.cuda.empty_cache()
         for batch_idx, batch in tqdm(enumerate(loader), desc=name, total=len(loader)):
             traj_data, input_dict, gt_dict = data_util.tensorize_and_pad(
-                batch, self.args.device, self.pad)
+                batch, self.args.device, self.pad, self.model.bridge, self.model.encoder_lang)
             model_out = self.model.forward(
                 vocab_in, gt_action=gt_dict['gt_action'], **input_dict)
             loss = self.model.compute_batch_loss(model_out, gt_dict)
