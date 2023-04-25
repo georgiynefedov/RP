@@ -33,8 +33,8 @@ class BaseDataset(TorchDataset):
 
         # load data
         self._length = self.load_data(path)
-        # if self.args.fast_epoch:
-        #     self._length = 16
+        if self.args.fast_epoch:
+            self._length = 16
         print('{} dataset size = {}'.format(partition, self._length))
 
         # load vocabularies for input language and output actions
@@ -78,7 +78,7 @@ class BaseDataset(TorchDataset):
                     # add dataset idx and partition into the json
                     json['dataset_name'] = self.name
                     self.jsons_and_keys.append((json, key))
-                    d_length += len(set(json['num']['low_to_high_idx']))
+                    d_length += sum([len(al) for al in json['num']['action_low']])
                     self.offsets[d_length] = idx + 1
                     # if the dataset has script annotations, do not add identical data
                     if len(set([str(j['ann']['instr']) for j in task_jsons])) == 1:
@@ -100,7 +100,7 @@ class BaseDataset(TorchDataset):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             frames = torch.tensor(feats_numpy)
-        return frames[:sum([1 if idx <= timestep else 0 for idx in task_json['num']['low_to_high_idx']]) + 1]
+        return frames[:timestep + 1]
     
     def load_lmdb(self, lmdb_path):
         '''

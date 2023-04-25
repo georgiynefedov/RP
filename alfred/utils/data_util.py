@@ -22,68 +22,26 @@ from alfred.gen.utils import image_util
 from alfred.utils import helper_util, model_util
 import re
 
-# from summact
-places_that_take_in = set(('sinkbasin', 'bathtubbasin', 'cabinet', 'fridge', 'garbagecan', 'microwave', 'drawer'))
-pddl_to_nl = {
-    'gotolocation':'go to the',
-	'pickupobject':'pick up the',
-	'putobject':'put the',
-	'coolobject':'cool the',
-	'heatobject':'heat the',
-	'cleanobject':'clean the',
-	'toggleobject':'toggle the',
-	'sliceobject':'slice the',
-	'diningtable':'dining table',
-	'sinkbasin':'sink basin',
-	'sidetable':'side table',
-	'butterknife':'butter knife',
-	'garbagecan':'garbage can',
-	'tissuebox':'tissue box',
-	'desklamp':'desk lamp',
-	'winebottle':'wine bottle',
-	'coffeetable':'coffee table',
-	'spraybottle':'spray bottle',
-	'floorlamp':'floor lamp',
-	'alarmclock':'alarm clock',
-	'remotecontrol':'remote control',
-	'coffeemachine':'coffee machine',
-	'toiletpaper':'toilet paper',
-	'toiletpaperhanger':'toilet paper hanger',
-	'creditcard':'credit card',
-	'stoveburner':'stove burner',
-	'handtowelholder':'hand towel holder',
-	'handtowel':'hand towel',
-	'bathtubbasin':'bathtub basin',
-	'soapbar':'soap bar',
-	'tennisracket':'tennis racket',
-	'soapbottle':'soap bottle',
-	'glassbottle':'glass bottle',
-	'dishsponge':'dish sponge',
-	'wateringcan':'watering can',
-	'baseballbat':'baseball bat',
-	'saltshaker':'salt shaker',
-	'peppershaker':'pepper shaker',
-	'stoveknob':'stove knob',
-	'showercurtain':'shower curtain',
-	'tomatosliced':'sliced tomato',
-	'wateringcan':'watering can',
-	'potatosliced':'sliced potato',
-	'breadsliced':'sliced bread',
-	'applesliced':'sliced apple',
-	'lettucesliced':'sliced lettuce',
-	'eggcracked':'cracked egg',
-	'laundryhamper':'laundry hamper',
-	'laundryhamperlid':'laundry hamper lid',
-	'tvstand':'tv stand',
-	'footstool':'foot stool',
-	'showerhead':'shower head',
-	'showerdoor':'shower door',
-	'showerglass':'shower glass',
-	'scrubbrush':'scrub brush',
-	'lightswitch':'light switch',
-	'towlholder':'towel holder'
+actions_vocab ={
+    '<<pad>>': '<pad>',
+    '<<seg>>': '<seg>',
+    '<<goal>>': '<goal>',
+    '<<mask>>': '<mask>',
+    'LookDown_15': 'look down',
+    'RotateLeft_90': 'rotate left',
+    'MoveAhead_25': 'move ahead',
+    'RotateRight_90': 'rotate right',
+    'PickupObject': 'pickup',
+    'PutObject': 'put',
+    'LookUp_15': 'look up',
+    '<<stop>>': 'stop',
+    'SliceObject': 'slice',
+    'OpenObject': 'open',
+    'CloseObject': 'close',
+    'ToggleObjectOn': 'toggle on',
+    'ToggleObjectOff': 'toggle off'
 }
-
+actions_set = set(actions_vocab.values())
 
 def read_images(image_path_list):
     images = []
@@ -94,31 +52,8 @@ def read_images(image_path_list):
     return images
 
 # from summact
-def translate_pddl_to_english(pddl):
-    new_text= []
-    i = 0
-    while i < len(pddl):
-        w = pddl[i]
-        if w in pddl_to_nl:
-            new_text.append(pddl_to_nl[w])
-            if w == 'putobject':
-                i += 1
-                w = pddl[i]
-                if w in pddl_to_nl:
-                    new_text.append(pddl_to_nl[w])
-                else:
-                    new_text.append(w)
-                if pddl[i+1] in places_that_take_in:
-                    new_text.append('in')
-                else:
-                    new_text.append('on')
-                new_text.append('the')
-        else:
-            new_text.append(w)
-        i += 1
-    new_text_to_return = " ".join(new_text)
-    new_text_to_return = re.sub(" , ", ", ", new_text_to_return)
-    return new_text_to_return
+def translate_actions_to_natural_language(actions):
+    return list(map(lambda x: actions_vocab[x], actions))
 
 
 def read_traj_images(json_path, image_folder):

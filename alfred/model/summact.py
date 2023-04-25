@@ -22,14 +22,15 @@ class Model(base.Model):
         # language embeddings
         self.encoder_lang = EncoderLang(args.device)
         
+        self.args = args
         # final touch
         self.reset()
         
-    def forward(self, vocab, **inputs):
+    def forward(self, input, input_mask, gt_action,):
         '''
         forward the model for multiple time-steps (used for training)
         '''
-        output = self.encoder_vl(inputs['input'], inputs['input_mask'], inputs['gt_action'])
+        output = self.encoder_vl(input, input_mask, gt_action)
         return output
 
     def reset(self):
@@ -39,12 +40,11 @@ class Model(base.Model):
         self.frames_traj = torch.zeros(1, 0, *self.visual_tensor_shape)
         self.action_traj = torch.zeros(1, 0).long()
 
-    def step(self, input_dict, vocab, prev_action=None):
+    def step(self, input, input_mask, vocab, prev_action=None):
         '''
         forward the model for a single time-step (used for real-time execution during eval)
         '''
-        frames = input_dict['frames']
-        device = frames.device
+        device = self.args.device
         if prev_action is not None:
             prev_action_int = vocab['action_low'].word2index(prev_action)
             prev_action_tensor = torch.tensor(prev_action_int)[None, None].to(device)

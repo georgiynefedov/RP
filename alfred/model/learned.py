@@ -78,7 +78,7 @@ class LearnedModel(nn.Module):
                 model_outs, losses_train = {}, {}
                 for batch_name, (traj_data, input_dict, gt_dict) in batches.items():
                     model_outs[batch_name] = self.model.forward(
-                        vocabs_in[batch_name.split(':')[-1]], gt_action=gt_dict['gt_action'], **input_dict)
+                        gt_action=gt_dict['gt_action'], input=input_dict['input'], input_mask=input_dict['input_mask'])
                     info['iters']['train'] += (len(traj_data) if ':' not in batch_name else 0)
                 gt.stamp('forward pass', unique=False)
                 # compute losses
@@ -158,7 +158,7 @@ class LearnedModel(nn.Module):
             traj_data, input_dict, gt_dict = data_util.tensorize_and_pad(
                 batch, self.args.device, self.pad, self.model.bridge, self.model.encoder_lang)
             model_out = self.model.forward(
-                vocab_in, gt_action=gt_dict['gt_action'], **input_dict)
+                gt_action=gt_dict['gt_action'], input=input_dict['input'], input_mask=input_dict['input_mask'])
             loss = self.model.compute_batch_loss(model_out, gt_dict)
             for k, v in loss.items():
                 ln = 'loss/' + k

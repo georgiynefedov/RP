@@ -70,8 +70,8 @@ class AlfredDataset(BaseDataset):
         '''
         load and embed actions
         '''
-        gt_actions = sum([sum([[a['action']], a['action_high_args']], []) for a in task_json['num']['action_high']], [])
-        gt_actions = data_util.translate_pddl_to_english(gt_actions)
+        gt_actions = sum([[a['action'] for a in al] for al in task_json['num']['action_low']], [])
+        gt_actions = ' '.join(data_util.translate_actions_to_natural_language(gt_actions))
         gt_actions = self.encoder_lang.tokenize(gt_actions)[0].to(self.args.device)
         return gt_actions
         
@@ -96,8 +96,8 @@ class AlfredDataset(BaseDataset):
         load and embed actions
         @timestep: the number of actions to load from the sequence
         '''
-        prev_actions = sum([sum([[a['action']], a['action_high_args']], []) for a in task_json['num']['action_high'][:timestep]], [])
-        prev_actions = data_util.translate_pddl_to_english(prev_actions)
+        prev_actions = sum([[a['action'] for a in al] for al in task_json['num']['action_low'][:timestep]], [])
+        prev_actions = ' '.join(data_util.translate_actions_to_natural_language(prev_actions))
         prev_actions = self.encoder_lang.forward(prev_actions)[0].to(self.args.device)
         return prev_actions
     
