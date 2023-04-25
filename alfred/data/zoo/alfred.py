@@ -59,8 +59,6 @@ class AlfredDataset(BaseDataset):
             # action
             feat['action'] = self.load_actions(timestep, task_json, self.encoder_lang.forward)
             feat['gt_action'] = self.load_gt_actions(task_json, self.encoder_lang.tokenize)
-            # print(feat['action'].shape)
-            # print(feat['gt_action'].shape)
             # low-level valid interact
             feat['action_valid_interact'] = [
                 a['valid_interact'] for a in sum(
