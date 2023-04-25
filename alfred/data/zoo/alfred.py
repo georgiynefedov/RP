@@ -57,8 +57,8 @@ class AlfredDataset(BaseDataset):
         # action outputs
         if not self.test_mode:
             # action
-            feat['action'] = self.load_actions(timestep, task_json)
-            feat['gt_action'] = self.load_gt_actions(task_json)
+            feat['action'] = self.load_actions(timestep, task_json, self.encoder_lang.forward)
+            feat['gt_action'] = self.load_gt_actions(task_json, self.encoder_lang.tokenize)
             # low-level valid interact
             feat['action_valid_interact'] = [
                 a['valid_interact'] for a in sum(
@@ -66,14 +66,11 @@ class AlfredDataset(BaseDataset):
         return feat
 
     # @timeit
-    def load_gt_actions(self, task_json):
+    def load_gt_actions(self, task_json, process):
         '''
         load and embed actions
         '''
-        gt_actions = sum([[a['action'] for a in al] for al in task_json['num']['action_low']], [])
-        gt_actions = ' '.join(data_util.translate_actions_to_natural_language(gt_actions))
-        gt_actions = self.encoder_lang.tokenize(gt_actions)[0].to(self.args.device)
-        return gt_actions
+        return self.load_actions(len(task_json['num']['action_low']), task_json, process)
         
     # @timeit
     def load_instrs(self, key):
@@ -91,13 +88,22 @@ class AlfredDataset(BaseDataset):
         return instrs
     
     # @timeit
-    def load_actions(self, timestep, task_json):
+    def load_actions(self, timestep, task_json, process):
         '''
         load and embed actions
         @timestep: the number of actions to load from the sequence
         '''
-        prev_actions = sum([[a['action'] for a in al] for al in task_json['num']['action_low'][:timestep]], [])
+        task_json['timestep'] = timestep
+        def get_object_list(al):
+            high_idx = al[0]['high_idx']
+            obj = task_json['num']['action_high'][high_idx]['action_high_args']
+            if len(obj):
+                task_json['timestep'] += 1
+                return obj
+            return []
+        
+        prev_actions = sum([sum([[a['action'] for a in al], get_object_list(al)], []) for al in task_json['num']['action_low']], [])[:task_json['timestep']]
         prev_actions = ' '.join(data_util.translate_actions_to_natural_language(prev_actions))
-        prev_actions = self.encoder_lang.forward(prev_actions)[0].to(self.args.device)
+        prev_actions = process(prev_actions)[0].to(self.args.device)
         return prev_actions
     

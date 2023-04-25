@@ -41,7 +41,6 @@ actions_vocab ={
     'ToggleObjectOn': 'toggle on',
     'ToggleObjectOff': 'toggle off'
 }
-actions_set = set(actions_vocab.values())
 
 def read_images(image_path_list):
     images = []
@@ -53,7 +52,7 @@ def read_images(image_path_list):
 
 # from summact
 def translate_actions_to_natural_language(actions):
-    return list(map(lambda x: actions_vocab[x], actions))
+    return list(map(lambda x: actions_vocab[x] if x in actions_vocab else x, actions)) 
 
 
 def read_traj_images(json_path, image_folder):
