@@ -57,8 +57,10 @@ class AlfredDataset(BaseDataset):
         # action outputs
         if not self.test_mode:
             # action
-            feat['action'] = self.load_actions(timestep, task_json)
-            feat['gt_action'] = self.load_gt_actions(task_json)
+            feat['action'] = self.load_actions(timestep, task_json, self.encoder_lang.forward)
+            feat['gt_action'] = self.load_gt_actions(task_json, self.encoder_lang.tokenize)
+            # print(feat['action'].shape)
+            # print(feat['gt_action'].shape)
             # low-level valid interact
             feat['action_valid_interact'] = [
                 a['valid_interact'] for a in sum(
@@ -66,14 +68,11 @@ class AlfredDataset(BaseDataset):
         return feat
 
     # @timeit
-    def load_gt_actions(self, task_json):
+    def load_gt_actions(self, task_json, process):
         '''
         load and embed actions
         '''
-        gt_actions = sum([[a['action'] for a in al] for al in task_json['num']['action_low']], [])
-        gt_actions = ' '.join(data_util.translate_actions_to_natural_language(gt_actions))
-        gt_actions = self.encoder_lang.tokenize(gt_actions)[0].to(self.args.device)
-        return gt_actions
+        return self.load_actions(sum(len(al) for al in task_json['num']['action_low']), task_json, process)
         
     # @timeit
     def load_instrs(self, key):
@@ -91,13 +90,15 @@ class AlfredDataset(BaseDataset):
         return instrs
     
     # @timeit
-    def load_actions(self, timestep, task_json):
+    def load_actions(self, timestep, task_json, process):
         '''
         load and embed actions
         @timestep: the number of actions to load from the sequence
         '''
-        prev_actions = sum([[a['action'] for a in al] for al in task_json['num']['action_low'][:timestep]], [])
-        prev_actions = ' '.join(data_util.translate_actions_to_natural_language(prev_actions))
-        prev_actions = self.encoder_lang.forward(prev_actions)[0].to(self.args.device)
+
+        prev_actions = sum([[a['action'] for a in al] for al in task_json['num']['action_low']], [])[:timestep]
+        prev_actions = data_util.translate_actions_to_natural_language(prev_actions, task_json)
+        print(prev_actions)
+        prev_actions = process(prev_actions)[0].to(self.args.device)
         return prev_actions
     
