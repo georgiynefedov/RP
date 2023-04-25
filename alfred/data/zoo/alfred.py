@@ -96,7 +96,6 @@ class AlfredDataset(BaseDataset):
 
         prev_actions = sum([[a['action'] for a in al] for al in task_json['num']['action_low']], [])[:timestep]
         prev_actions = data_util.translate_actions_to_natural_language(prev_actions, task_json)
-        print(prev_actions)
         prev_actions = process(prev_actions)[0].to(self.args.device)
         return prev_actions
     
