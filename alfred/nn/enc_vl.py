@@ -22,10 +22,13 @@ class EncoderVL(nn.Module):
     def forward(self,
                 input_emb,
                 input_mask,
-                gt_action,
-                attn_masks=True):
+                gt_action):
         '''
         pass embedded inputs through embeddings and encode them using a transformer
         '''
         output = self.model(encoder_outputs = (input_emb, ), attention_mask=input_mask, labels=gt_action)
         return {'action': output.logits, 'loss': output.loss}
+    
+    def step(self, input_emb, input_mask, action_embeds):
+        output = self.model(encoder_outputs = (input_emb, ), attention_mask=input_mask, decoder_inputs_embeds=action_embeds)
+        return {'action': output.logits}

@@ -35,6 +35,9 @@ class BaseDataset(TorchDataset):
         self._length = self.load_data(path)
         if self.args.fast_epoch:
             self._length = 16
+        if 'train' not in partition:
+            self._length = 100
+            
         print('{} dataset size = {}'.format(partition, self._length))
 
         # load vocabularies for input language and output actions
@@ -100,7 +103,7 @@ class BaseDataset(TorchDataset):
         with warnings.catch_warnings():
             warnings.simplefilter('ignore')
             frames = torch.tensor(feats_numpy)
-        return frames[:timestep + 1]
+        return frames[:timestep + 1].to(self.args.device)
     
     def load_lmdb(self, lmdb_path):
         '''

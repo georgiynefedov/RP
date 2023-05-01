@@ -77,6 +77,7 @@ class LearnedModel(nn.Module):
                 # do the forward passes
                 model_outs, losses_train = {}, {}
                 for batch_name, (traj_data, input_dict, gt_dict) in batches.items():
+                    torch.cuda.empty_cache()
                     model_outs[batch_name] = self.model.forward(
                         gt_action=gt_dict['gt_action'], input=input_dict['input'], input_mask=input_dict['input_mask'])
                     info['iters']['train'] += (len(traj_data) if ':' not in batch_name else 0)

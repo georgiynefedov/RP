@@ -7,6 +7,7 @@ from alfred.nn.enc_lang import EncoderLang
 from alfred.nn.enc_visual import Resnet50Bridge
 from alfred.nn.enc_vl import EncoderVL
 from alfred.utils import model_util
+from alfred.utils import data_util
 
 
 class Model(base.Model):
@@ -38,37 +39,29 @@ class Model(base.Model):
         reset internal states (used for real-time execution during eval)
         '''
         self.frames_traj = torch.zeros(1, 0, *self.visual_tensor_shape)
-        self.action_traj = torch.zeros(1, 0).long()
+        self.action_traj = self.encoder_lang.forward('start').to(self.args.device).squeeze(0)
 
-    def step(self, input, input_mask, vocab, prev_action=None):
+    def step(self, input_dict, vocab, prev_action=None):
         '''
         forward the model for a single time-step (used for real-time execution during eval)
         '''
         device = self.args.device
+        # print("input dict", input_dict.keys())
         if prev_action is not None:
-            prev_action_int = vocab['action_low'].word2index(prev_action)
-            prev_action_tensor = torch.tensor(prev_action_int)[None, None].to(device)
+            prev_action_tensor = self.encoder_lang.forward(prev_action)[0].to(device)
             self.action_traj = torch.cat(
-                (self.action_traj.to(device), prev_action_tensor), dim=1)
+                (self.action_traj[:-1].to(device), prev_action_tensor), dim=0)
+        print("action traj", self.action_traj.shape)
+        input_dict = input_dict.copy()
+        frames = input_dict['frames']
+        
         self.frames_traj = torch.cat(
             (self.frames_traj.to(device), frames[None]), dim=1)
-        # at timestep t we have t-1 prev actions so we should pad them
-        action_traj_pad = torch.cat(
-            (self.action_traj.to(device),
-             torch.zeros((1, 1)).to(device).long()), dim=1)
-        model_out = self.forward(
-            vocab=vocab['word'],
-            lang=input_dict['lang'],
-            lengths_lang=input_dict['lengths_lang'],
-            length_lang_max=input_dict['length_lang_max'],
-            frames=self.frames_traj.clone(),
-            lengths_frames=torch.tensor([self.frames_traj.size(1)]),
-            length_frames_max=self.frames_traj.size(1),
-            action=action_traj_pad)
-        step_out = {}
-        for key, value in model_out.items():
-            # return only the last actions, ignore the rest
-            step_out[key] = value[:, -1:]
+        input_dict['frames'] = self.frames_traj.squeeze(0).to(device)
+        input_dict['action'] = self.action_traj.to(device)
+        _, full_input_dict, _ = data_util.tensorize_and_pad(zip([None], [input_dict]), device, self.pad, self.bridge, self.encoder_lang)
+        
+        step_out = self.encoder_vl.step(full_input_dict['input'], full_input_dict['input_mask'], action_embeds=self.action_traj[None])
         return step_out
 
     def compute_batch_loss(self, model_out, gt_dict):

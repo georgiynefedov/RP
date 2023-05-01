@@ -13,6 +13,7 @@ from alfred.gen import constants
 from alfred.env.thor_env import ThorEnv
 from alfred.nn.enc_visual import FeatureExtractor
 from alfred.utils import data_util, model_util
+import time
 
 
 def setup_scene(env, traj_data, reward_type='dense', test_split=False):
@@ -240,19 +241,31 @@ def extract_rcnn_pred(class_idx, obj_predictor, env, verbose=False):
     return mask
 
 
-def agent_step(
-        model, input_dict, vocab, prev_action, env, args, num_fails, obj_predictor):
+def agent_step(model, input_dict, vocab_idx, prev_action, env, args, num_fails, obj_predictor):
     '''
     environment step based on model prediction
     '''
     # forward model
-    with torch.no_grad():
-        m_out = model.step(input_dict, vocab, prev_action=prev_action)
-    m_pred = model_util.extract_action_preds(
-        m_out, model.pad, vocab['action_low'], clean_special_tokens=False)[0]
-    action = m_pred['action']
-    if args.debug:
-        print("Predicted action: {}".format(action))
+    m_pred = {
+        'action': None
+    }
+    valid_vocab = vocab_idx
+    counter = 20
+    while (m_pred['action'] is None or (model_util.has_interaction(action) and m_pred['object'] is None)) and counter > 0:
+        with torch.no_grad():
+            m_out = model.step(input_dict, valid_vocab, prev_action=prev_action)
+        prev_action = None
+        m_pred, valid_vocab = model_util.extract_action_preds(model, m_out, valid_vocab)
+        action = m_pred['action']
+        if args.debug:
+            print("Predicted action: {}".format(action))
+        counter -= 1
+    if action is None:
+        print("Setting prediceted action to 'pad'")
+        action = 'pad'
+    else:
+        print(f"\nFOUND VALID ACTION {action}\n")
+        # time.sleep(3)
 
     mask = None
     obj = m_pred['object'][0][0] if model_util.has_interaction(action) else None
@@ -283,7 +296,7 @@ def agent_step(
                     print("Interact API failed {} times; latest error '{}'".format(
                         num_fails, err))
                 episode_end = True
-    return episode_end, str(action), num_fails, target_instance_id, api_action
+    return episode_end, data_util.actions_to_nl[action], num_fails, target_instance_id, api_action
 
 
 def expert_step(action, masks, model, input_dict, vocab, prev_action, env, args):
@@ -317,7 +330,7 @@ def get_observation(event, extractor):
 
 
 def load_language(
-        dataset, task, dataset_key, model_args, extractor, subgoal_idx=None,
+        dataset, task, dataset_key, model_args, extractor, bridge, encoder_lang, subgoal_idx=None,
         test_split=False):
     '''
     load language features from the dataset and unit-test the feature extractor
@@ -327,17 +340,18 @@ def load_language(
         feat_args = (task, subgoal_idx, subgoal_idx + 1)
     else:
         feat_args = (task,)
-    feat_numpy = dataset.load_features(*feat_args)
+    tmp = len(dataset.jsons_and_keys[int(dataset_key)][0]['num']['low_to_high_idx'])
+    feat_numpy = dataset.load_features(*feat_args, timestep=tmp, key=dataset_key)
     # test extractor with the frames
     if not test_split:
-        frames_expert = dataset.load_frames(dataset_key)
-        model_util.test_extractor(task['root'], extractor, frames_expert)
+        frames_expert = dataset.load_frames(dataset_key, tmp, task)
+        # model_util.test_extractor(task['root'], extractor, frames_expert)
     if not test_split and 'frames' in dataset.ann_type:
         # frames will be used as annotations
         feat_numpy['frames'] = frames_expert
-    _, input_dict, _ = data_util.tensorize_and_pad(
-        [(task, feat_numpy)], model_args.device, dataset.pad)
-    return input_dict
+    # _, input_dict, _ = data_util.tensorize_and_pad(
+    #     [(task, feat_numpy)], model_args.device, dataset.pad, bridge, encoder_lang)
+    return feat_numpy
 
 
 def load_expert_actions(dataset, task, dataset_key, subgoal_idx):

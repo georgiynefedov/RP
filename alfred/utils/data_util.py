@@ -22,25 +22,47 @@ from alfred.gen.utils import image_util
 from alfred.utils import helper_util, model_util
 import re
 
-actions_vocab ={
-    '<<pad>>': '<pad>',
-    '<<seg>>': '<seg>',
-    '<<goal>>': '<goal>',
-    '<<mask>>': '<mask>',
-    'LookDown_15': 'look down',
-    'RotateLeft_90': 'rotate left',
-    'MoveAhead_25': 'move ahead',
-    'RotateRight_90': 'rotate right',
+actions_to_nl = {
+    '<<pad>>': 'pad',
+    '<<seg>>': 'seg',
+    '<<goal>>': 'goal',
+    '<<mask>>': 'mask',
+    'LookDown_15': 'down',
+    'RotateLeft_90': 'left',
+    'MoveAhead_25': 'ahead',
+    'RotateRight_90': 'right',
     'PickupObject': 'pickup',
     'PutObject': 'put',
-    'LookUp_15': 'look up',
+    'LookUp_15': 'up',
     '<<stop>>': 'stop',
     'SliceObject': 'slice',
     'OpenObject': 'open',
     'CloseObject': 'close',
-    'ToggleObjectOn': 'toggle on',
-    'ToggleObjectOff': 'toggle off'
+    'ToggleObjectOn': 'on',
+    'ToggleObjectOff': 'off'
 }
+
+nl_to_actions = {v: k for k, v in actions_to_nl.items()}
+
+# from summact
+# objects_to_nl = {
+#     'diningtable': 'dining table', 'sinkbasin': 'sink basin', 'sidetable': 'side table', 'butterknife': 'butter knife',
+#     'garbagecan': 'garbage can', 'tissuebox': 'tissue box', 'desklamp': 'desk lamp', 'winebottle': 'wine bottle', 
+#     'coffeetable': 'coffee table', 'spraybottle': 'spray bottle', 'floorlamp': 'floor lamp', 'alarmclock': 'alarm clock',
+#     'remotecontrol': 'remote control', 'coffeemachine': 'coffee machine', 'toiletpaper': 'toilet paper', 
+#     'toiletpaperhanger': 'toilet paper hanger', 'creditcard': 'credit card', 'stoveburner': 'stove burner', 
+#     'handtowelholder': 'hand towel holder', 'handtowel': 'hand towel', 'bathtubbasin': 'bathtub basin', 'soapbar':
+#     'soap bar', 'tennisracket': 'tennis racket', 'soapbottle': 'soap bottle', 'glassbottle': 'glass bottle', 'dishsponge': 
+#     'dish sponge', 'wateringcan': 'watering can', 'baseballbat': 'baseball bat', 'saltshaker': 'salt shaker',
+#     'peppershaker': 'pepper shaker', 'stoveknob': 'stove knob', 'showercurtain': 'shower curtain', 'tomatosliced':
+#     'sliced tomato', 'wateringcan': 'watering can', 'potatosliced': 'sliced potato', 'breadsliced': 'sliced bread',
+#     'applesliced': 'sliced apple', 'lettucesliced': 'sliced lettuce', 'eggcracked': 'cracked egg', 'laundryhamper': 
+#     'laundry hamper', 'laundryhamperlid': 'laundry hamper lid', 'tvstand': 'tv stand', 'footstool': 'foot stool',
+#     'showerhead': 'shower head', 'showerdoor': 'shower door', 'showerglass': 'shower glass', 'scrubbrush': 'scrub brush',
+#     'lightswitch': 'light switch', 'towlholder': 'towel holder'
+# }
+
+# nl_to_objects = {v: k for k, v in objects_to_nl.items()}
 
 def read_images(image_path_list):
     images = []
@@ -52,12 +74,12 @@ def read_images(image_path_list):
 
 # from summact
 def translate_actions_to_natural_language(actions, task_json):
-    result = []
+    result = ['start']
     for idx, action in enumerate(actions):
         if 'Object' in action:
-            result.append(actions_vocab[action] + ' ' + task_json['num']['action_high'][task_json['num']['low_to_high_idx'][idx]]['action_high_args'][0])
-        elif action in actions_vocab:
-            result.append(actions_vocab[action])
+            result.append(actions_to_nl[action] + ' ' + task_json['num']['action_high'][task_json['num']['low_to_high_idx'][idx]]['action_high_args'][0])
+        elif action in actions_to_nl:
+            result.append(actions_to_nl[action])
         else:
             result.append(action)
     return ' '.join(result)
@@ -227,6 +249,7 @@ def get_input_embedding(feat_list, pad, bridge, device, encoder_lang):
         '''
         embed a single input
         '''
+        # print(x.keys())
         x['lang'] = torch.squeeze(x['lang'])[:-1] # squeeze and remove last token <eos>
         x['frames'] = bridge(x['frames'].to(device)).to(device)
         images_prefix_embeds = torch.squeeze(encoder_lang.forward('images:'))[:-1] # remove last token <eos>
@@ -255,12 +278,14 @@ def tensorize_and_pad(batch, device, pad, bridge, encoder_lang):
     for key in feat_list[0].keys():
         feat_dict[key] = [el[key] for el in feat_list]
     # check that all samples come from the same dataset
-    assert len(set([t['dataset_name'] for t in traj_data])) == 1
+    if traj_data[0]:
+        assert len(set([t['dataset_name'] for t in traj_data])) == 1
     
     k = 'gt_action'
-    v = feat_dict['gt_action']
-    seqs = v if isinstance(v[0], torch.Tensor) else [torch.tensor(vv, device=device, dtype=torch.long) for vv in v]
-    gt_dict[k] = pad_sequence(seqs, batch_first=True, padding_value=pad)
+    if k in feat_dict:
+        v = feat_dict['gt_action']
+        seqs = v if isinstance(v[0], torch.Tensor) else [torch.tensor(vv, device=device, dtype=torch.long) for vv in v]
+        gt_dict[k] = pad_sequence(seqs, batch_first=True, padding_value=pad)
     
     return traj_data, input_dict, gt_dict
 

@@ -23,7 +23,7 @@ def cfg_exp():
     # we can fine-tune a pre-trained model
     pretrained_path = None
     # run the code on a small chunk of data
-    fast_epoch = True
+    fast_epoch = False
 
     # DATA SETTINGS
     data = {
@@ -32,7 +32,7 @@ def cfg_exp():
         # additional dataset name(s) can be specified for validation only
         'valid': '',
         # specify the length of each dataset
-        'length': 30000,
+        'length': 10000, #30000,
         # what to use as annotations: {'lang', 'lang_frames', 'frames'}
         'ann_type': 'lang',
     }
@@ -61,7 +61,7 @@ def cfg_eval():
     # no teacher forcing with expert (only for subgoals)
     no_teacher_force = False
     # run in the debug mode
-    debug = False
+    debug = True
     # X server number
     x_display = '0'
     # range of checkpoints to evaluate, (9, 20, 2) means epochs 9, 11, 13, 15, 17, 19
@@ -83,9 +83,9 @@ def cfg_train():
 
     # HYPER PARAMETERS
     # batch size
-    batch = 16
+    batch = 4
     # number of epochs
-    epochs = 20
+    epochs = 200
     # optimizer type, must be in ('adam', 'adamw')
     optimizer = 'adamw'
     # L2 regularization weight
@@ -99,7 +99,7 @@ def cfg_train():
         # (LINEAR PROFILE) num epoch to adjust learning rate
         'decay_epoch': 10,
         # (LINEAR PROFILE) scaling multiplier at each milestone
-        'decay_scale': 0.1,
+        'decay_scale': 0.7,
         # (COSINE & TRIANGULAR PROFILE) learning rate final value
         'final': 1e-5,
         # (TRIANGULAR PROFILE) period of the cycle to increase the learning rate

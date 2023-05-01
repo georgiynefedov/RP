@@ -94,8 +94,8 @@ class AlfredDataset(BaseDataset):
         @timestep: the number of actions to load from the sequence
         '''
 
-        prev_actions = sum([[a['action'] for a in al] for al in task_json['num']['action_low']], [])[:timestep]
-        prev_actions = data_util.translate_actions_to_natural_language(prev_actions, task_json)
-        prev_actions = process(prev_actions)[0].to(self.args.device)
-        return prev_actions
+        actions = sum([[a['action'] for a in al] for al in task_json['num']['action_low']], [])[:timestep]
+        actions = data_util.translate_actions_to_natural_language(actions, task_json)
+        actions = process(actions)[0].to(self.args.device)
+        return actions
     
