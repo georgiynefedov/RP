@@ -23,23 +23,19 @@ from alfred.utils import helper_util, model_util
 import re
 
 actions_to_nl = {
-    '<<pad>>': 'pad',
-    '<<seg>>': 'seg',
-    '<<goal>>': 'goal',
-    '<<mask>>': 'mask',
-    'LookDown_15': 'down',
-    'RotateLeft_90': 'left',
-    'MoveAhead_25': 'ahead',
-    'RotateRight_90': 'right',
-    'PickupObject': 'pickup',
-    'PutObject': 'put',
-    'LookUp_15': 'up',
-    '<<stop>>': 'stop',
-    'SliceObject': 'slice',
-    'OpenObject': 'open',
-    'CloseObject': 'close',
-    'ToggleObjectOn': 'on',
-    'ToggleObjectOff': 'off'
+    'LookDown_15': 'LookDown',
+    'RotateLeft_90': 'RotateLeft',
+    'MoveAhead_25': 'MoveAhead',
+    'RotateRight_90': 'RotateRight',
+    'PickupObject': 'PickupObject',
+    'PutObject': 'PutObject',
+    'LookUp_15': 'LookUp',
+    '<<stop>>': 'NoOp',
+    'SliceObject': 'SliceObject',
+    'OpenObject': 'OpenObject',
+    'CloseObject': 'CloseObject',
+    'ToggleObjectOn': 'ToggleObjectOn',
+    'ToggleObjectOff': 'ToggleObjectOff',
 }
 
 nl_to_actions = {v: k for k, v in actions_to_nl.items()}
@@ -74,7 +70,7 @@ def read_images(image_path_list):
 
 # from summact
 def translate_actions_to_natural_language(actions, task_json):
-    result = ['start']
+    result = ['NoOp']
     for idx, action in enumerate(actions):
         if 'Object' in action:
             result.append(actions_to_nl[action] + ' ' + task_json['num']['action_high'][task_json['num']['low_to_high_idx'][idx]]['action_high_args'][0])

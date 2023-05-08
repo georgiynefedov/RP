@@ -30,7 +30,7 @@ def cfg_args():
     # whether to overwrite old data in case it exists
     overwrite = False
     # number of processes to run the data processing in (0 for main thread)
-    num_workers = 4
+    num_workers = 0
     # debug run with only 16 entries
     fast_epoch = False
 
@@ -132,6 +132,26 @@ def process_jsons(traj_paths, preprocessor, lock, save_path):
     if str(save_path).endswith('/worker00'):
         progressbar.finish()
 
+excluded_paths = [
+    'trial_T20190908_054316_003433',
+    'trial_T20190909_062011_223446',
+    'trial_T20190909_013637_168506',
+    'trial_T20190907_222606_903630',
+    'trial_T20190918_174139_904388',
+    'trial_T20190909_053101_102010',
+    'trial_T20190906_232604_097173',
+    'trial_T20190907_185942_820847',
+    'trial_T20190907_151643_465634',
+    'trial_T20190908_142153_073870',
+    'trial_T20190907_034714_802572',
+    
+    'trial_T20190906_181830_873214',
+    'trial_T20190907_013546_073160',
+    'trial_T20190907_013704_727644',
+    'trial_T20190908_115507_503798',
+    'trial_T20190908_120151_167011',
+    'trial_T20190909_045706_358954'
+]
 
 def get_traj_paths(input_path, processed_files_path, fast_epoch):
     if (input_path / 'processed.txt').exists():
@@ -147,8 +167,12 @@ def get_traj_paths(input_path, processed_files_path, fast_epoch):
         traj_paths_all = sorted([
             str(path) for path in input_path.glob('*/*/*/traj_data.json')])
         traj_paths = [path for path in traj_paths_all if 'tests_' not in path]
+        
+    traj_paths = list(filter(lambda path: path not in excluded_paths, traj_paths))
+        
     if fast_epoch:
-        traj_paths = traj_paths[::250]
+        traj_paths = traj_paths[::200]
+    
     num_files = len(traj_paths)
     if processed_files_path is not None and processed_files_path.exists():
         if str(processed_files_path).endswith(constants.VOCAB_FILENAME):
@@ -230,7 +254,6 @@ def gather_data(output_path, num_workers):
         shutil.rmtree(output_path / dirname)
     os.remove(output_path / '.deleting_worker_dirs')
     os.remove(output_path / 'processed_feats.txt')
-
 
 @ex.automain
 def main(args):

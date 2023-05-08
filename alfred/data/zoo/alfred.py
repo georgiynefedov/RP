@@ -38,10 +38,12 @@ class AlfredDataset(BaseDataset):
         base_idx = self.offsets[base_idx]
         task_json, key = self.jsons_and_keys[base_idx]
         feat_dict = {}
+        # print(f"\nGetting dataset item {idx}, which is frame {timestep} in sequence {base_idx}")
         if self._load_features:
             feat_dict = self.load_features(task_json, timestep, key)
         if self._load_frames:
             feat_dict['frames'] = self.load_frames(key, timestep, task_json)
+            # print(f"Loading frames: {feat_dict['frames'].shape}")
         return task_json, feat_dict
 
     # @timeit
@@ -57,7 +59,7 @@ class AlfredDataset(BaseDataset):
         # action outputs
         if not self.test_mode:
             # action
-            feat['action'] = self.load_actions(timestep, task_json, self.encoder_lang.forward)
+            feat['action'] = self.load_actions(timestep, task_json, self.encoder_lang.forward, 'action history')
             feat['gt_action'] = self.load_gt_actions(task_json, self.encoder_lang.tokenize)
             # low-level valid interact
             feat['action_valid_interact'] = [
@@ -70,7 +72,7 @@ class AlfredDataset(BaseDataset):
         '''
         load and embed actions
         '''
-        return self.load_actions(sum(len(al) for al in task_json['num']['action_low']), task_json, process)
+        return self.load_actions(sum(len(al) for al in task_json['num']['action_low']), task_json, process, 'GT actions')
         
     # @timeit
     def load_instrs(self, key):
@@ -88,7 +90,7 @@ class AlfredDataset(BaseDataset):
         return instrs
     
     # @timeit
-    def load_actions(self, timestep, task_json, process):
+    def load_actions(self, timestep, task_json, process, label=None):
         '''
         load and embed actions
         @timestep: the number of actions to load from the sequence
@@ -96,6 +98,8 @@ class AlfredDataset(BaseDataset):
 
         actions = sum([[a['action'] for a in al] for al in task_json['num']['action_low']], [])[:timestep]
         actions = data_util.translate_actions_to_natural_language(actions, task_json)
+        # if label:
+        #     print(f"Loading {label}: {actions}")
         actions = process(actions)[0].to(self.args.device)
         return actions
     

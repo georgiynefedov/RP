@@ -40,8 +40,8 @@ class Preprocessor(object):
 
 
         traj['ann'] = {
-            'goal': goal_ann + ' <<goal>>',
-            'instr': [instr_ann + ' <<instr>>' for instr_ann in instr_anns],
+            'goal': '<<goal>> ' + goal_ann,
+            'instr': ['<<instr>> ' + instr_ann for instr_ann in instr_anns],
             'repeat_idx': r_idx
         }
         if not self.subgoal_ann:
@@ -51,7 +51,9 @@ class Preprocessor(object):
         if 'num' not in traj:
             traj['num'] = {}
         # pre-process instructions
-        return self.encoder_lang.forward(' '.join([traj['ann']['goal'], *traj['ann']['instr']])).cpu()
+        instrs = ' '.join([traj['ann']['goal'], *traj['ann']['instr']])
+        # print(f"Encoding goal/instructions: {instrs}")
+        return self.encoder_lang.forward(instrs).cpu()
 
 
     def process_actions(self, ex, traj):

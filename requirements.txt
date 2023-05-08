@@ -19,4 +19,8 @@ torchvision==0.8.2
 tensorboardX==1.8
 ai2thor==2.1.0
 Werkzeug==2.0.3
-clip
+ftfy
+git+https://github.com/openai/CLIP.git
+SentencePiece
+lmdb
+transformers

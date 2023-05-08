@@ -32,7 +32,7 @@ def cfg_exp():
         # additional dataset name(s) can be specified for validation only
         'valid': '',
         # specify the length of each dataset
-        'length': 10000, #30000,
+        'length': 2000, #30000,
         # what to use as annotations: {'lang', 'lang_frames', 'frames'}
         'ann_type': 'lang',
     }
