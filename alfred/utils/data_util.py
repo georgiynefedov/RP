@@ -31,12 +31,15 @@ actions_to_nl = {
     'PutObject': 'PutObject',
     'LookUp_15': 'LookUp',
     '<<stop>>': 'NoOp',
+    '<<start>>': 'NoOp',
     'SliceObject': 'SliceObject',
     'OpenObject': 'OpenObject',
     'CloseObject': 'CloseObject',
     'ToggleObjectOn': 'ToggleObjectOn',
     'ToggleObjectOff': 'ToggleObjectOff',
 }
+
+actions_to_nl = {k: v.lower() for k, v in actions_to_nl.items()}
 
 nl_to_actions = {v: k for k, v in actions_to_nl.items()}
 
@@ -70,15 +73,16 @@ def read_images(image_path_list):
 
 # from summact
 def translate_actions_to_natural_language(actions, task_json):
-    result = ['NoOp']
+    result = []
     for idx, action in enumerate(actions):
+        i = idx - 1 # adjust by -1 because of the <<start>> action
         if 'Object' in action:
-            result.append(actions_to_nl[action] + ' ' + task_json['num']['action_high'][task_json['num']['low_to_high_idx'][idx]]['action_high_args'][0])
+            result.append(actions_to_nl[action] + ' ' + task_json['num']['action_high'][task_json['num']['low_to_high_idx'][i]]['action_high_args'][0])
         elif action in actions_to_nl:
             result.append(actions_to_nl[action])
         else:
             result.append(action)
-    return ' '.join(result)
+    return ' '.join(result[:-1]), result[-1]
 
 
 def read_traj_images(json_path, image_folder):
@@ -280,8 +284,13 @@ def tensorize_and_pad(batch, device, pad, bridge, encoder_lang):
     k = 'gt_action'
     if k in feat_dict:
         v = feat_dict['gt_action']
+        # print("GT Actions before padding: ", v)
+        # print("GT Actions before padding: ", list(map(lambda x: encoder_lang.detokenize(x), v)))
         seqs = v if isinstance(v[0], torch.Tensor) else [torch.tensor(vv, device=device, dtype=torch.long) for vv in v]
-        gt_dict[k] = pad_sequence(seqs, batch_first=True, padding_value=pad)
+        gt_dict[k] = pad_sequence(seqs, batch_first=True, padding_value=-100)
+        # print("GT Actions after padding: ", gt_dict[k])
+        # print("GT Actions after padding: ", list(map(lambda x: encoder_lang.detokenize(x), gt_dict[k])))
+        
     
     return traj_data, input_dict, gt_dict
 

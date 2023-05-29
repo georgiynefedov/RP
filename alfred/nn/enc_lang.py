@@ -18,8 +18,9 @@ class EncoderLang(nn.Module):
             param.requires_grad_(False)
         
     def forward(self, x, vocab=None):
-        toks = self.tokenize(x, vocab).to(self.device)
-        return self.embed(toks)
+        with torch.no_grad():
+            toks = self.tokenize(x, vocab).to(self.device)
+            return self.embed(toks)
     
     def tokenize(self, tok, vocab=None):
         if vocab != None:
@@ -31,4 +32,5 @@ class EncoderLang(nn.Module):
         return self.tokenizer.decode(toks)
         
     def embed(self, toks):
-        return self.model.encoder.embed_tokens(toks).to(self.device)
+        with torch.no_grad():
+            return self.model.encoder.embed_tokens(toks).to(self.device)

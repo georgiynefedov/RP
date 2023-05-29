@@ -59,20 +59,12 @@ class AlfredDataset(BaseDataset):
         # action outputs
         if not self.test_mode:
             # action
-            feat['action'] = self.load_actions(timestep, task_json, self.encoder_lang.forward, 'action history')
-            feat['gt_action'] = self.load_gt_actions(task_json, self.encoder_lang.tokenize)
+            feat['action'], feat['gt_action'] = self.load_actions(timestep, task_json, self.encoder_lang)
             # low-level valid interact
             feat['action_valid_interact'] = [
                 a['valid_interact'] for a in sum(
                     task_json['num']['action_low'], [])]
         return feat
-
-    # @timeit
-    def load_gt_actions(self, task_json, process):
-        '''
-        load and embed actions
-        '''
-        return self.load_actions(sum(len(al) for al in task_json['num']['action_low']), task_json, process, 'GT actions')
         
     # @timeit
     def load_instrs(self, key):
@@ -90,16 +82,18 @@ class AlfredDataset(BaseDataset):
         return instrs
     
     # @timeit
-    def load_actions(self, timestep, task_json, process, label=None):
+    def load_actions(self, timestep, task_json, encoder_lang: EncoderLang):
         '''
         load and embed actions
         @timestep: the number of actions to load from the sequence
         '''
-
-        actions = sum([[a['action'] for a in al] for al in task_json['num']['action_low']], [])[:timestep]
-        actions = data_util.translate_actions_to_natural_language(actions, task_json)
-        # if label:
-        #     print(f"Loading {label}: {actions}")
-        actions = process(actions)[0].to(self.args.device)
-        return actions
+        actions = ['<<start>>'] + sum([[a['action'] for a in al] for al in task_json['num']['action_low']], [])[:timestep + 1]
+        actions_history, action_gt = data_util.translate_actions_to_natural_language(actions, task_json)
+        # print(f"Loading Action History \n\t {actions_history} \nand GT Action \n\t {action_gt}")
+        actions_history = encoder_lang.tokenize(actions_history)[0].to(self.args.device)[:-1]
+        # print("Tokenized Action History", actions_history, '\n')
+        actions_history = encoder_lang.embed(actions_history)
+        action_gt = encoder_lang.tokenize(action_gt)[0].to(self.args.device)[:-1]
+        # print("Tokenized GT action", action_gt, '\n')
+        return actions_history, action_gt
     

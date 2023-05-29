@@ -52,8 +52,14 @@ class Resnet50Bridge(nn.Module):
         # CLIP Conv to T5 FC bridge
         self.bridge = nn.Sequential(
             nn.Conv2d(2048, 1024, 1),
+            nn.ReLU(),
+            nn.BatchNorm2d(1024),
             nn.Conv2d(1024, 128, 1),
+            nn.ReLU(),
+            nn.BatchNorm2d(128),
             nn.Conv2d(128, 32, 1),
+            nn.ReLU(),
+            nn.BatchNorm2d(32),
             nn.Flatten(),
             nn.Linear(1568, 768)
         )
@@ -84,13 +90,13 @@ class RCNN(nn.Module):
         self.feat_layer = '3'
         if archi == 'maskrcnn':
             self.model = models.detection.maskrcnn_resnet50_fpn(
-                pretrained=(checkpoint_path is None),
-                pretrained_backbone=(checkpoint_path is None),
+                weights=models.detection.MaskRCNN_ResNet50_FPN_Weights.DEFAULT,
+                weights_backbone=models.ResNet50_Weights.DEFAULT,
                 min_size=800)
         elif archi == 'fasterrcnn':
             self.model = models.detection.fasterrcnn_resnet50_fpn(
-                pretrained=(checkpoint_path is None),
-                pretrained_backbone=(checkpoint_path is None),
+                weights=models.detection.MaskRCNN_ResNet50_FPN_Weights.DEFAULT,
+                weights_backbone=models.ResNet50_Weights.DEFAULT,
                 min_size=224)
         else:
             raise ValueError('Unknown model type = {}'.format(archi))

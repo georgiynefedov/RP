@@ -78,11 +78,12 @@ def load_model(fsave, device, check_epoch=None):
     save = torch.load(fsave, map_location=device)
     LearnedModel = import_module('alfred.model.learned').LearnedModel
     model = LearnedModel(save['args'], save['embs_ann'], save['vocab_out'])
-    model.load_state_dict(save['model'])
+    model.load_state_dict(save['model'], strict=False)
     OptimizerClass = torch.optim.Adam if save['args'].optimizer == 'adam' else torch.optim.AdamW
     optimizer = OptimizerClass(model.parameters(), lr=1e-3, weight_decay=save['args'].weight_decay)
     optimizer.load_state_dict(save['optim'])
     if check_epoch:
+        print('Checking epoch', check_epoch, save['metric']['epoch'])
         assert save['metric']['epoch'] == check_epoch, 'Epochs in info.json and latest.pth do not match'
     model = model.to(torch.device(device))
     optimizer_to(optimizer, torch.device(device))
@@ -106,6 +107,8 @@ def save_model(model, model_name, stats, optimizer=None, symlink=False):
         # nn.DaraParallel related renaming
         state_dict = {key.replace('model.module.', 'model.'): value
                       for key, value in model.state_dict().items()}
+        # don't save language model
+        state_dict = {key: state_dict[key] for key in list(filter(lambda x: not x.startswith('model.encoder_lang'), state_dict.keys()))}
         assert optimizer is not None
         torch.save({
             'metric': stats,
@@ -261,12 +264,16 @@ def extract_action_preds(model, model_out, valid_vocab):
     '''
     output processing for a VLN agent
     '''
+    orig_pred_action_index = torch.argmax(model_out['action'], dim=2)[0]
+    print("Orig pred action index:", orig_pred_action_index)
+    print("Decoded orig prediction ", model.encoder_lang.detokenize(orig_pred_action_index).split())
     outs = torch.full(model_out['action'].shape, float('-inf')).to(model.args.device)
     outs[:,:,valid_vocab] = model_out['action'][:,:,valid_vocab]
     pred_action_index = torch.argmax(outs, dim=2)[0]
+    print("Pred action index:", pred_action_index)
     decoded = model.encoder_lang.detokenize(pred_action_index).split()
     valid_vocab = valid_vocab[~torch.isin(valid_vocab, pred_action_index)]
-    print("Decoded prediction [:2]", decoded[:2] if len(decoded) > 2 else decoded)
+    print("Decoded prediction ", decoded)
     action = None
     object = None
     if decoded and decoded[0] in data_util.nl_to_actions:
@@ -314,19 +321,6 @@ def compute_obj_class_precision(metrics, gt_dict, classes_out):
     precision = torch.sum(
         obj_classes_pred == obj_classes_gt) / len(obj_classes_gt)
     metrics['action/object'].append(precision.item())
-
-
-def obj_classes_loss(pred_obj_cls, gt_obj_cls, interact_idxs):
-    '''
-    Compute a cross-entropy loss for the object class predictions.
-    '''
-    pred_obj_cls_inter = pred_obj_cls[interact_idxs]
-    # the interaction objects should be non zeros
-    assert not (gt_obj_cls == 0).any()
-    # compute the loss for interaction objects
-    obj_cls_loss = F.cross_entropy(
-        pred_obj_cls_inter, gt_obj_cls, reduction='mean')
-    return obj_cls_loss
 
 
 def tokens_to_lang(tokens, vocab, skip_tokens=None, join=True):

@@ -27,7 +27,7 @@ class Model(base.Model):
         # final touch
         self.reset()
         
-    def forward(self, input, input_mask, gt_action,):
+    def forward(self, input, input_mask, gt_action):
         '''
         forward the model for multiple time-steps (used for training)
         '''
@@ -39,29 +39,29 @@ class Model(base.Model):
         reset internal states (used for real-time execution during eval)
         '''
         self.frames_traj = torch.zeros(1, 0, *self.visual_tensor_shape)
-        self.action_traj = self.encoder_lang.forward('start').to(self.args.device).squeeze(0)
+        self.action_traj = self.encoder_lang.tokenize('NoOp').to(self.args.device).squeeze(0)[:-1]
 
     def step(self, input_dict, vocab, prev_action=None):
         '''
         forward the model for a single time-step (used for real-time execution during eval)
         '''
         device = self.args.device
-        # print("input dict", input_dict.keys())
         if prev_action is not None:
-            prev_action_tensor = self.encoder_lang.forward(prev_action)[0].to(device)
+            prev_action_tensor = self.encoder_lang.tokenize(prev_action)[0].to(device)[:-1]
             self.action_traj = torch.cat(
-                (self.action_traj[:-1].to(device), prev_action_tensor), dim=0)
-        print("action traj", self.action_traj.shape)
+                (self.action_traj.to(device), prev_action_tensor), dim=0)
+        print("action traj", self.action_traj, self.encoder_lang.detokenize(self.action_traj))
         input_dict = input_dict.copy()
-        frames = input_dict['frames']
-        
-        self.frames_traj = torch.cat(
-            (self.frames_traj.to(device), frames[None]), dim=1)
+        if input_dict['frames'] is not None:
+            frames = input_dict['frames']
+            self.frames_traj = torch.cat((self.frames_traj.to(device), frames[None]), dim=1)
+            
         input_dict['frames'] = self.frames_traj.squeeze(0).to(device)
-        input_dict['action'] = self.action_traj.to(device)
+        print("frames traj", input_dict['frames'].shape)
+        input_dict['action'] = self.encoder_lang.embed(self.action_traj.to(device))
         _, full_input_dict, _ = data_util.tensorize_and_pad(zip([None], [input_dict]), device, self.pad, self.bridge, self.encoder_lang)
         
-        step_out = self.encoder_vl.step(full_input_dict['input'], full_input_dict['input_mask'], action_embeds=self.action_traj[None])
+        step_out = self.encoder_vl.step(full_input_dict['input'], full_input_dict['input_mask'], action_embeds=input_dict['action'][None])
         return step_out
 
     def compute_batch_loss(self, model_out, gt_dict):

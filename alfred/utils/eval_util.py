@@ -250,19 +250,20 @@ def agent_step(model, input_dict, vocab_idx, prev_action, env, args, num_fails, 
         'action': None
     }
     valid_vocab = vocab_idx
-    counter = 20
+    counter = 3
     while (m_pred['action'] is None or (model_util.has_interaction(action) and m_pred['object'] is None)) and counter > 0:
         with torch.no_grad():
             m_out = model.step(input_dict, valid_vocab, prev_action=prev_action)
         prev_action = None
+        input_dict['frames'] = None
         m_pred, valid_vocab = model_util.extract_action_preds(model, m_out, valid_vocab)
         action = m_pred['action']
         if args.debug:
             print("Predicted action: {}".format(action))
         counter -= 1
     if action is None:
-        print("Setting prediceted action to 'pad'")
-        action = 'pad'
+        print("Setting prediceted action to 'NoOp'")
+        action = 'NoOp'
     else:
         print(f"\nFOUND VALID ACTION {action}\n")
         # time.sleep(3)
@@ -296,7 +297,7 @@ def agent_step(model, input_dict, vocab_idx, prev_action, env, args, num_fails, 
                     print("Interact API failed {} times; latest error '{}'".format(
                         num_fails, err))
                 episode_end = True
-    return episode_end, data_util.actions_to_nl[action], num_fails, target_instance_id, api_action
+    return episode_end, action, num_fails, target_instance_id, api_action
 
 
 def expert_step(action, masks, model, input_dict, vocab, prev_action, env, args):

@@ -43,19 +43,18 @@ def evaluate_task(env, model, dataset, extractor, trial_uid, dataset_idx, args, 
     # reset model and setup scene
     model.reset()
     eval_util.setup_scene(env, traj_data, reward_type='dense')
-    objs = dataset.vocab_obj.to_dict()['index2word']
+    objs = list(map(lambda x: x.lower(), dataset.vocab_obj.to_dict()['index2word']))
     acts = set(model.vocab_out.to_dict()['index2word'])
     for act in ['<<pad>>', '<<seg>>', '<<mask>>', '<<goal>>']:
         acts.remove(act)
     vocab = set(sum([data_util.actions_to_nl[a].split() for a in acts], [])).union(set(objs))
     vocab = sum([model.encoder_lang.tokenize(w).unsqueeze(-1).tolist() for w in vocab], [])
     vocab = torch.tensor(list(set(sum([sum(w, []) for w in vocab], [])))).to(model.args.device)
-    # vocab = {'action_low': model.vocab_out, 'object': dataset.vocab_obj}
     # load language features and task info
     input_dict = eval_util.load_language(
         dataset, traj_data, traj_key, model.args, extractor, model.bridge, model.encoder_lang)
     task_info = eval_util.read_task_data(traj_data)
-
+    
     prev_action = None
     t, num_fails, reward = 0, 0, 0
     while t < args.max_steps:
