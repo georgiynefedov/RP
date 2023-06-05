@@ -30,8 +30,8 @@ actions_to_nl = {
     'PickupObject': 'PickupObject',
     'PutObject': 'PutObject',
     'LookUp_15': 'LookUp',
-    '<<stop>>': 'NoOp',
-    '<<start>>': 'NoOp',
+    '<<stop>>': 'stop',
+    '<<start>>': 'start',
     'SliceObject': 'SliceObject',
     'OpenObject': 'OpenObject',
     'CloseObject': 'CloseObject',
@@ -72,12 +72,11 @@ def read_images(image_path_list):
     return images
 
 # from summact
-def translate_actions_to_natural_language(actions, task_json):
+def translate_actions_to_natural_language(actions):
     result = []
-    for idx, action in enumerate(actions):
-        i = idx - 1 # adjust by -1 because of the <<start>> action
+    for action in actions:
         if 'Object' in action:
-            result.append(actions_to_nl[action] + ' ' + task_json['num']['action_high'][task_json['num']['low_to_high_idx'][i]]['action_high_args'][0])
+            result.append(actions_to_nl[action.split()[0]] + ' ' + action.split()[1])
         elif action in actions_to_nl:
             result.append(actions_to_nl[action])
         else:
@@ -182,12 +181,12 @@ def gather_feats(files, output_path):
     if output_path.is_dir():
         shutil.rmtree(output_path)
     lmdb_feats = lmdb.open(str(output_path), 700*1024**3, writemap=True)
-    os.makedirs(output_path / 'pickle', exist_ok=True) # for debugging
+    # os.makedirs(output_path / 'pickle', exist_ok=True) # for debugging
     with lmdb_feats.begin(write=True) as txn_feats:
         for idx, path in tqdm(enumerate(files)):
             traj_feats = torch.load(path).numpy()
             txn_feats.put('{:06}'.format(idx).encode('ascii'), traj_feats.tobytes())
-            torch.save(torch.load(path), output_path / 'pickle' / '{:06}.pkl'.format(idx))
+            # torch.save(torch.load(path), output_path / 'pickle' / '{:06}.pkl'.format(idx))
     lmdb_feats.close()
 
 
@@ -284,12 +283,8 @@ def tensorize_and_pad(batch, device, pad, bridge, encoder_lang):
     k = 'gt_action'
     if k in feat_dict:
         v = feat_dict['gt_action']
-        # print("GT Actions before padding: ", v)
-        # print("GT Actions before padding: ", list(map(lambda x: encoder_lang.detokenize(x), v)))
         seqs = v if isinstance(v[0], torch.Tensor) else [torch.tensor(vv, device=device, dtype=torch.long) for vv in v]
         gt_dict[k] = pad_sequence(seqs, batch_first=True, padding_value=-100)
-        # print("GT Actions after padding: ", gt_dict[k])
-        # print("GT Actions after padding: ", list(map(lambda x: encoder_lang.detokenize(x), gt_dict[k])))
         
     
     return traj_data, input_dict, gt_dict

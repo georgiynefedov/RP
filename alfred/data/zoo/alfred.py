@@ -31,30 +31,35 @@ class AlfredDataset(BaseDataset):
     def __getitem__(self, idx):
         # base_idx is the index of the sequence in the original dataset
         # offsets contains a map from new dataset indices to original indices
-        base_idx = idx
-        while not base_idx in self.offsets.keys():
-            base_idx -= 1
-        timestep = idx - base_idx
-        base_idx = self.offsets[base_idx]
-        task_json, key = self.jsons_and_keys[base_idx]
+        sequence_idx = idx
+        while sequence_idx not in self.offsets.keys():
+            sequence_idx -= 1
+        timestep = idx - sequence_idx
+        sequence_idx = self.offsets[sequence_idx]
+        annotator = 0
+        while timestep >= len(self.jsons_and_keys[sequence_idx][annotator]['num']['low_to_high_idx']):
+            timestep -= len(self.jsons_and_keys[sequence_idx][annotator]['num']['low_to_high_idx'])
+            annotator += 1
+            
+        task_json = self.jsons_and_keys[sequence_idx][annotator]
         feat_dict = {}
-        # print(f"\nGetting dataset item {idx}, which is frame {timestep} in sequence {base_idx}")
+        # print(f"\nGetting dataset item {idx}, which is frame {timestep} in sequence {sequence_idx} by annotator {annotator}")
         if self._load_features:
-            feat_dict = self.load_features(task_json, timestep, key)
+            feat_dict = self.load_features(task_json, timestep)
         if self._load_frames:
-            feat_dict['frames'] = self.load_frames(key, timestep, task_json)
+            feat_dict['frames'] = self.load_frames(sequence_idx, timestep, task_json)
             # print(f"Loading frames: {feat_dict['frames'].shape}")
         return task_json, feat_dict
 
     # @timeit
-    def load_features(self, task_json, timestep, key):
+    def load_features(self, task_json, timestep):
         '''
         load features from task_json
         '''
         feat = dict()
         # language inputs
         
-        feat['lang'] = self.load_instrs(key)
+        feat['lang'] = self.load_instrs(task_json)
 
         # action outputs
         if not self.test_mode:
@@ -67,19 +72,15 @@ class AlfredDataset(BaseDataset):
         return feat
         
     # @timeit
-    def load_instrs(self, key):
+    def load_instrs(self, task_json):
         '''
         load pre-processed instructions embeddings from the disk
         '''
-        if not hasattr(self, 'instrs_lmdb'):
-            self.instrs_lmdb, self.instrs = self.load_lmdb(self.instrs_lmdb_path)
-        instrs_bytes = self.instrs.get(key)
-        instrs_numpy = np.frombuffer(instrs_bytes, dtype=np.float32)
-        instrs_numpy = instrs_numpy.reshape((1, -1, 768))
-        with warnings.catch_warnings():
-            warnings.simplefilter('ignore')
-            instrs = torch.tensor(instrs_numpy).to(self.args.device)
-        return instrs
+        instrs = ' '.join([task_json['ann']['goal'], *task_json['ann']['instr']])
+        # print(f"Encoding goal/instructions: {instrs}")
+        instrs = self.encoder_lang.tokenize(instrs).to(self.args.device)[0][:-1]
+        # print("Tokenized instructions", instrs, '\n')
+        return self.encoder_lang.embed(instrs)
     
     # @timeit
     def load_actions(self, timestep, task_json, encoder_lang: EncoderLang):
@@ -87,13 +88,15 @@ class AlfredDataset(BaseDataset):
         load and embed actions
         @timestep: the number of actions to load from the sequence
         '''
-        actions = ['<<start>>'] + sum([[a['action'] for a in al] for al in task_json['num']['action_low']], [])[:timestep + 1]
-        actions_history, action_gt = data_util.translate_actions_to_natural_language(actions, task_json)
+        def get_action(a):
+            return a['action'] + ' ' + a['objectId'].lower() if a['objectId'] else a['action']
+        actions = ['<<start>>'] + sum([[get_action(a) for a in al] for al in task_json['num']['action_low']], [])[:timestep + 1]
+        actions_history, action_gt = data_util.translate_actions_to_natural_language(actions)
         # print(f"Loading Action History \n\t {actions_history} \nand GT Action \n\t {action_gt}")
-        actions_history = encoder_lang.tokenize(actions_history)[0].to(self.args.device)[:-1]
+        actions_history = encoder_lang.tokenize(actions_history)[0].to(self.args.device)
         # print("Tokenized Action History", actions_history, '\n')
         actions_history = encoder_lang.embed(actions_history)
-        action_gt = encoder_lang.tokenize(action_gt)[0].to(self.args.device)[:-1]
+        action_gt = encoder_lang.tokenize(action_gt)[0].to(self.args.device)
         # print("Tokenized GT action", action_gt, '\n')
         return actions_history, action_gt
     

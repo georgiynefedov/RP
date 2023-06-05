@@ -93,13 +93,13 @@ def cfg_train():
     # learning rate settings
     lr = {
         # learning rate initial value
-        'init': 1e-4,
+        'init': 1e-3,
         # lr scheduler type: {'linear', 'cosine', 'triangular', 'triangular2'}
         'profile': 'linear',
         # (LINEAR PROFILE) num epoch to adjust learning rate
         'decay_epoch': 10,
         # (LINEAR PROFILE) scaling multiplier at each milestone
-        'decay_scale': 0.9,
+        'decay_scale': 0.7,
         # (COSINE & TRIANGULAR PROFILE) learning rate final value
         'final': 1e-5,
         # (TRIANGULAR PROFILE) period of the cycle to increase the learning rate

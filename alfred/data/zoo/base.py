@@ -8,6 +8,7 @@ import numpy as np
 from torch.utils.data import Dataset as TorchDataset
 from copy import deepcopy
 from tqdm import tqdm
+from collections import defaultdict
 
 from alfred.gen import constants
 from alfred.utils import data_util
@@ -68,7 +69,7 @@ class BaseDataset(TorchDataset):
             with open(os.path.join(
                     path, self.partition, 'jsons.pkl'), 'rb') as jsons_file:
                 jsons = pickle.load(jsons_file)
-            self.jsons_and_keys = []
+            self.jsons_and_keys = defaultdict(list)
             for idx in range(len(jsons)):
                 key = '{:06}'.format(idx).encode('ascii')
                 task_jsons = jsons[key]
@@ -80,21 +81,22 @@ class BaseDataset(TorchDataset):
                         json['task'] = '/'.join(json['root'].split('/')[-3:-1])
                     # add dataset idx and partition into the json
                     json['dataset_name'] = self.name
-                    self.jsons_and_keys.append((json, key))
+                    self.jsons_and_keys[idx].append(json)
                     d_length += sum([len(al) for al in json['num']['action_low']])
-                    self.offsets[d_length] = idx + 1
                     # if the dataset has script annotations, do not add identical data
                     if len(set([str(j['ann']['instr']) for j in task_jsons])) == 1:
                         break
+                self.offsets[d_length] = idx + 1
 
         # return the true length of the loaded data
         return d_length if jsons else None     
 
-    def load_frames(self, key, timestep, task_json):
+    def load_frames(self, sequence_idx, timestep, task_json):
         '''
         load image features from the disk
         @offset: the number of frames to load from sequence @key
         '''
+        key = '{:06}'.format(sequence_idx).encode('ascii')
         if not hasattr(self, 'feats_lmdb'):
             self.feats_lmdb, self.feats = self.load_lmdb(self.feats_lmdb_path)
         feats_bytes = self.feats.get(key)

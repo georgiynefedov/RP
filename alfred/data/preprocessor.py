@@ -41,7 +41,7 @@ class Preprocessor(object):
 
         traj['ann'] = {
             'goal': '<<goal>> ' + goal_ann,
-            'instr': ['<<instr>> ' + instr_ann for instr_ann in instr_anns],
+            'instr': ['<<instr>>'] + instr_anns,
             'repeat_idx': r_idx
         }
         if not self.subgoal_ann:
@@ -86,6 +86,7 @@ class Preprocessor(object):
                 'high_idx': a['high_idx'],
                 'action': a['discrete_action']['action'],
                 'action_high_args': a['discrete_action']['args'],
+                'objectId': a['api_action']['objectId'].split('|')[0] if 'objectId' in a['api_action'] else None,
             })
 
             # low-level bounding box (not used in the model)

@@ -81,6 +81,13 @@ class LearnedModel(nn.Module):
                     model_outs[batch_name] = self.model.forward(
                         gt_action=gt_dict['gt_action'], input=input_dict['input'], input_mask=input_dict['input_mask'])
                     info['iters']['train'] += (len(traj_data) if ':' not in batch_name else 0)
+                    for i in range(len(model_outs[batch_name]['action'])):
+                        toks = torch.argmax(model_outs[batch_name]['action'][i], dim=-1)
+                        gt_copy = gt_dict['gt_action'].clone()
+                        gt_copy[gt_copy==-100] = 0
+                        # print(f'GT action {i}', self.model.encoder_lang.detokenize(gt_copy[i]))
+                        # print(f"Batch Output {i}", self.model.encoder_lang.detokenize(toks))
+                        # print(toks)
                 gt.stamp('forward pass', unique=False)
                 # compute losses
                 losses_train = self.model.compute_loss(
