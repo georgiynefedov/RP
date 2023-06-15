@@ -85,9 +85,9 @@ class LearnedModel(nn.Module):
                         toks = torch.argmax(model_outs[batch_name]['action'][i], dim=-1)
                         gt_copy = gt_dict['gt_action'].clone()
                         gt_copy[gt_copy==-100] = 0
-                        # print(f'GT action {i}', self.model.encoder_lang.detokenize(gt_copy[i]))
-                        # print(f"Batch Output {i}", self.model.encoder_lang.detokenize(toks))
-                        # print(toks)
+                        print(f'GT action {i}', self.model.encoder_lang.detokenize(gt_copy[i]))
+                        print(f"Batch Output {i}", self.model.encoder_lang.detokenize(toks))
+                        print(toks)
                 gt.stamp('forward pass', unique=False)
                 # compute losses
                 losses_train = self.model.compute_loss(
@@ -104,14 +104,12 @@ class LearnedModel(nn.Module):
 
                 # compute metrics
                 for dataset_name in losses_train.keys():
-                    # self.model.compute_metrics(
-                    #     model_outs[dataset_name], batches[dataset_name][2],
-                    #     metrics['train:' + dataset_name])
+                    self.model.compute_metrics(
+                        model_outs[dataset_name], batches[dataset_name][2],
+                        metrics['train:' + dataset_name])
                     for key, value in losses_train[dataset_name].items():
                         metrics['train:' + dataset_name]['loss/' + key].append(
                             value.item())
-                    metrics['train:' + dataset_name]['loss/total'].append(
-                        sum_loss.detach().cpu().item())
                 gt.stamp('metrics', unique=False)
                 if self.args.profile:
                     print(gt.report(include_itrs=False, include_stats=False))
@@ -171,9 +169,8 @@ class LearnedModel(nn.Module):
             for k, v in loss.items():
                 ln = 'loss/' + k
                 m_valid[ln].append(v.item())
-            # self.model.compute_metrics(
-            #     model_out, gt_dict, m_valid, verbose=(batch_idx == 1))
+            self.model.compute_metrics(
+                model_out, gt_dict, m_valid, verbose=(batch_idx == 1))
             iters_valid[name] += len(traj_data)
-            m_valid['loss/total'].append(sum(loss.values()).detach().cpu().item())
         m_valid = {k: sum(v) / len(v) for k, v in m_valid.items()}
         return m_valid

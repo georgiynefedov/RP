@@ -116,8 +116,10 @@ def wrap_datasets(datasets, args):
             num_samples = 16 if args.fast_epoch else (
                 args.data['length'] or len(dataset))
             num_samples = num_samples // len(args.data['train'])
+            generator = torch.Generator()
+            generator.manual_seed(args.seed)
             sampler = torch.utils.data.WeightedRandomSampler(
-                weights, num_samples=num_samples, replacement=True)
+                weights, num_samples=num_samples, replacement=True, generator=generator)
             loader = torch.utils.data.DataLoader(
                 dataset, batch_size, sampler=sampler, **loader_args)
         else:

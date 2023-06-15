@@ -75,10 +75,21 @@ class Model(base.Model):
         '''
         compute exact matching and f1 score for action predictions
         '''
-        preds = model_util.extract_action_preds(
-            model_out, self.pad, self.vocab_out, lang_only=True)
-        stop_token = self.vocab_out.word2index('<<stop>>')
-        gt_actions = model_util.tokens_to_lang(
-            gt_dict['action'], self.vocab_out, {self.pad, stop_token})
-        model_util.compute_f1_and_exact(
-            metrics_dict, [p['action'] for p in preds], gt_actions, 'action')
+        # import IPython; IPython.embed()
+        
+        
+        action = torch.argmax(model_out['action'], axis=-1)
+        gt_action = gt_dict['gt_action']
+        GT = gt_action != -100
+        T = (action == gt_action) & GT
+        print(T.sum())
+        print(GT.sum())
+        metrics_dict['token_acc'].append(T.sum().item()/GT.sum().item())
+        
+        # preds = model_util.extract_action_preds(
+        #     model_out, self.pad, self.vocab_out, lang_only=True)
+        # stop_token = self.vocab_out.word2index('<<stop>>')
+        # gt_actions = model_util.tokens_to_lang(
+        #     gt_dict['action'], self.vocab_out, {self.pad, stop_token})
+        # model_util.compute_f1_and_exact(
+        #     metrics_dict, [p['action'] for p in preds], gt_actions, 'action')

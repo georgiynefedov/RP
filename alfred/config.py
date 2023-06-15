@@ -32,7 +32,7 @@ def cfg_exp():
         # additional dataset name(s) can be specified for validation only
         'valid': '',
         # specify the length of each dataset
-        'length': 3000,
+        'length': 1000,
         # what to use as annotations: {'lang', 'lang_frames', 'frames'}
         'ann_type': 'lang',
     }
@@ -75,7 +75,7 @@ def cfg_eval():
 def cfg_train():
     # GENERAL TRANING SETTINGS
     # random seed
-    seed = 1
+    seed = 14
     # load a checkpoint from a previous epoch (if available)
     resume = True
     # whether to print execution time for different parts of the code
@@ -99,7 +99,7 @@ def cfg_train():
         # (LINEAR PROFILE) num epoch to adjust learning rate
         'decay_epoch': 10,
         # (LINEAR PROFILE) scaling multiplier at each milestone
-        'decay_scale': 0.7,
+        'decay_scale': 0.8,
         # (COSINE & TRIANGULAR PROFILE) learning rate final value
         'final': 1e-5,
         # (TRIANGULAR PROFILE) period of the cycle to increase the learning rate

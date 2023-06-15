@@ -73,8 +73,7 @@ class EvalMaster(object):
         trials = []
         # in case if we evaluate on train, do not evaluate more trajectories than in eval
         max_trials_num = 820 if 'tests' not in self.dataset.partition else 9999999
-        for dataset_idx, (task_json, unused_dataset_key) in enumerate(
-                self.dataset.jsons_and_keys[:max_trials_num]):
+        for dataset_idx, task_json in enumerate(sum(self.dataset.jsons_and_keys.values(), [])[:max_trials_num]):
             trial_uid = '{}:{}'.format(task_json['task'], task_json['repeat_idx'])
             if not self.args.subgoals:
                 trials.append((trial_uid, dataset_idx))
