@@ -20,6 +20,8 @@ class BaseDataset(TorchDataset):
         self.partition = partition
         self.name = name
         self.args = args
+        self.sampler_weights = []
+        self.counts = defaultdict(int)
         if ann_type not in ('lang', 'frames', 'lang_frames'):
             raise ValueError('Unknown annotation type: {}'.format(ann_type))
         self.ann_type = ann_type
@@ -83,11 +85,15 @@ class BaseDataset(TorchDataset):
                     json['dataset_name'] = self.name
                     self.jsons_and_keys[idx].append(json)
                     d_length += sum([len(al) for al in json['num']['action_low']])
+                    self.sampler_weights += list(map(lambda x: x['action'], sum(json['num']['action_low'], [])))
+                    actions = list(map(lambda x: x['action'], sum(json['num']['action_low'], [])))
+                    for a in actions:
+                        self.counts[a] += 1
                     # if the dataset has script annotations, do not add identical data
                     if len(set([str(j['ann']['instr']) for j in task_jsons])) == 1:
                         break
                 self.offsets[d_length] = idx + 1
-
+        self.sampler_weights = list(map(lambda x: 1 / self.counts[x] if self.counts[x] > 0 else 1, self.sampler_weights))
         # return the true length of the loaded data
         return d_length if jsons else None     
 

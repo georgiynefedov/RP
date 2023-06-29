@@ -32,7 +32,7 @@ def cfg_exp():
         # additional dataset name(s) can be specified for validation only
         'valid': '',
         # specify the length of each dataset
-        'length': 1000,
+        'length': 800,
         # what to use as annotations: {'lang', 'lang_frames', 'frames'}
         'ann_type': 'lang',
     }
@@ -83,7 +83,7 @@ def cfg_train():
 
     # HYPER PARAMETERS
     # batch size
-    batch = 32
+    batch = 8
     # number of epochs
     epochs = 200
     # optimizer type, must be in ('adam', 'adamw')
