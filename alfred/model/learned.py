@@ -13,7 +13,7 @@ from alfred.utils import data_util, model_util
 
 
 class LearnedModel(nn.Module):
-    def __init__(self, args, embs_ann, vocab_out):
+    def __init__(self, args, embs_ann, vocab_out, encoder_lang):
         '''
         Abstract model
         '''
@@ -27,7 +27,7 @@ class LearnedModel(nn.Module):
         self.summary_writer = None
         # create the model to be trained
         ModelClass = import_module('alfred.model.{}'.format(args.model)).Model
-        self.model = ModelClass(args, embs_ann, vocab_out, self.pad, self.seg)
+        self.model = ModelClass(args, embs_ann, vocab_out, self.pad, self.seg, encoder_lang)
 
     def run_train(self, loaders, info, optimizer=None):
         '''
@@ -85,9 +85,9 @@ class LearnedModel(nn.Module):
                         toks = torch.argmax(model_outs[batch_name]['action'][i], dim=-1)
                         gt_copy = gt_dict['gt_action'].clone()
                         gt_copy[gt_copy==-100] = 0
-                        print(f'GT action {i}', self.model.encoder_lang.detokenize(gt_copy[i]))
-                        print(f"Batch Output {i}", self.model.encoder_lang.detokenize(toks))
-                        print(toks)
+                        # print(f'GT action {i}', self.model.encoder_lang.detokenize(gt_copy[i]))
+                        # print(f"Batch Output {i}", self.model.encoder_lang.detokenize(toks))
+                        # print(toks)
                 gt.stamp('forward pass', unique=False)
                 # compute losses
                 losses_train = self.model.compute_loss(

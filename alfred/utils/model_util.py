@@ -13,6 +13,7 @@ from torch.nn import functional as F
 from alfred.utils import metric_util
 from alfred.gen import constants
 from alfred.utils import data_util
+from alfred.nn.enc_lang import EncoderLang
 
 def adjust_lr(optimizer, args, epoch, schedulers):
     '''
@@ -70,14 +71,14 @@ def create_optimizer_and_schedulers(first_epoch, args, parameters, optimizer=Non
     return optimizer, {'base': lr_scheduler, 'warmup': warmup_scheduler}
 
 
-def load_model(fsave, device, check_epoch=None):
+def load_model(fsave, device, encoder_lang: EncoderLang, check_epoch=None):
     '''
     load pth model from disk
     '''
     print('Loading from {} to {}'.format(fsave, device))
     save = torch.load(fsave, map_location=device)
     LearnedModel = import_module('alfred.model.learned').LearnedModel
-    model = LearnedModel(save['args'], save['embs_ann'], save['vocab_out'])
+    model = LearnedModel(save['args'], save['embs_ann'], save['vocab_out'], encoder_lang)
     model.load_state_dict(save['model'], strict=False)
     OptimizerClass = torch.optim.Adam if save['args'].optimizer == 'adam' else torch.optim.AdamW
     optimizer = OptimizerClass(model.parameters(), lr=1e-3, weight_decay=save['args'].weight_decay)

@@ -4,7 +4,7 @@ from alfred.utils import data_util
 
 
 class Model(nn.Module):
-    def __init__(self, args, embs_ann, vocab_out, pad, seg):
+    def __init__(self, args, embs_ann, vocab_out, pad, seg, encoder_lang):
         '''
         Abstract model
         '''

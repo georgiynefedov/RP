@@ -11,6 +11,7 @@ from alfred.data import AlfredDataset
 from alfred.gen import constants
 from alfred.model.learned import LearnedModel
 from alfred.utils import data_util, helper_util, model_util
+from alfred.nn.enc_lang import EncoderLang
 
 ex = Experiment('train', ingredients=[train_ingredient, exp_ingredient])
 
@@ -43,7 +44,7 @@ def prepare(train, exp):
     return args
 
 
-def create_model(args, embs_ann, vocab_out):
+def create_model(args, embs_ann, vocab_out, encoder_lang: EncoderLang):
     '''
     load a model and its optimizer
     '''
@@ -52,14 +53,14 @@ def create_model(args, embs_ann, vocab_out):
         # load a saved model
         loadpath = os.path.join(args.dout, 'latest.pth')
         model, optimizer = model_util.load_model(
-            loadpath, args.device, prev_train_info['progress'] - 1)
+            loadpath, args.device, prev_train_info['progress'] - 1, encoder_lang)
         assert model.vocab_out.contains_same_content(vocab_out)
         model.args = args
     else:
         # create a new model
         if not args.resume and os.path.isdir(args.dout):
             shutil.rmtree(args.dout)
-        model = LearnedModel(args, embs_ann, vocab_out)
+        model = LearnedModel(args, embs_ann, vocab_out, encoder_lang)
         model = model.to(torch.device(args.device))
         optimizer = None
         if args.pretrained_path:
@@ -84,14 +85,14 @@ def create_model(args, embs_ann, vocab_out):
     return model, optimizer, prev_train_info
 
 
-def load_data(name, args, ann_type, valid_only=False):
+def load_data(name, args, ann_type, encoder_lang: EncoderLang, valid_only=False):
     '''
     load dataset and wrap them into torch loaders
     '''
     partitions = ([] if valid_only else ['train']) + ['valid_seen', 'valid_unseen']
     datasets = []
     for partition in partitions:
-        dataset = AlfredDataset(name, partition, args, ann_type)
+        dataset = AlfredDataset(name, partition, args, ann_type, encoder_lang)
         datasets.append(dataset)
     return datasets
 
@@ -155,16 +156,17 @@ def main(train, exp):
     args = prepare(train, exp)
     # load dataset(s) and process vocabs
     datasets = []
+    encoder_lang = EncoderLang(torch.device('cuda'))
     ann_types = iter(args.data['ann_type'])
     for name, ann_type in zip(args.data['train'], ann_types):
-        datasets.extend(load_data(name, args, ann_type))
+        datasets.extend(load_data(name, args, ann_type, encoder_lang=encoder_lang))
     for name, ann_type in zip(args.data['valid'], ann_types):
-        datasets.extend(load_data(name, args, ann_type, valid_only=True))
+        datasets.extend(load_data(name, args, ann_type, valid_only=True, encoder_lang=encoder_lang))
     # assign vocabs to datasets and check their sizes for nn.Embeding inits
     embs_ann, vocab_out = process_vocabs(datasets, args)
     # wrap datasets with loaders
     loaders = wrap_datasets(datasets, args)
     # create the model
-    model, optimizer, prev_train_info = create_model(args, embs_ann, vocab_out)
+    model, optimizer, prev_train_info = create_model(args, embs_ann, vocab_out, encoder_lang=encoder_lang)
     # start train loop
     model.run_train(loaders, prev_train_info, optimizer=optimizer)

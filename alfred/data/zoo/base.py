@@ -93,7 +93,7 @@ class BaseDataset(TorchDataset):
                     if len(set([str(j['ann']['instr']) for j in task_jsons])) == 1:
                         break
                 self.offsets[d_length] = idx + 1
-        self.sampler_weights = list(map(lambda x: 1 / self.counts[x] if self.counts[x] > 0 else 1, self.sampler_weights))
+        self.sampler_weights = list(map(lambda x: d_length / self.counts[x] if self.counts[x] > 0 else 1, self.sampler_weights))
         # return the true length of the loaded data
         return d_length if jsons else None     
 

@@ -11,17 +11,17 @@ from alfred.utils import data_util
 
 
 class Model(base.Model):
-    def __init__(self, args, embs_ann, vocab_out, pad, seg):
+    def __init__(self, args, embs_ann, vocab_out, pad, seg, encoder_lang):
         '''
         transformer agent
         '''
-        super().__init__(args, embs_ann, vocab_out, pad, seg)
+        super().__init__(args, embs_ann, vocab_out, pad, seg, encoder_lang)
         # encoder and visual embeddings
         self.encoder_vl = EncoderVL(args)
         # feature embeddings
         self.bridge = Resnet50Bridge(args.device)
         # language embeddings
-        self.encoder_lang = EncoderLang(args.device)
+        self.encoder_lang = encoder_lang
         
         self.args = args
         # final touch

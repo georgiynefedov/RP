@@ -13,13 +13,13 @@ from alfred.nn.enc_lang import EncoderLang
 
 
 class AlfredDataset(BaseDataset):
-    def __init__(self, name, partition, args, ann_type):
+    def __init__(self, name, partition, args, ann_type, encoder_lang: EncoderLang):
         super().__init__(name, partition, args, ann_type)
         # preset values
         self.max_subgoals = constants.MAX_SUBGOALS
         self._load_features = True
         self._load_frames = True
-        self.encoder_lang = EncoderLang()
+        self.encoder_lang = encoder_lang
         # load the vocabulary for object classes
         self.vocab_obj = torch.load(os.path.join(
             constants.ET_ROOT, constants.OBJ_CLS_VOCAB))
