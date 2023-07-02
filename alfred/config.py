@@ -32,7 +32,7 @@ def cfg_exp():
         # additional dataset name(s) can be specified for validation only
         'valid': '',
         # specify the length of each dataset
-        'length': 3000,
+        'length': 10000,
         # what to use as annotations: {'lang', 'lang_frames', 'frames'}
         'ann_type': 'lang',
     }
@@ -83,7 +83,7 @@ def cfg_train():
 
     # HYPER PARAMETERS
     # batch size
-    batch = 16
+    batch = 32
     # number of epochs
     epochs = 200
     # optimizer type, must be in ('adam', 'adamw')
@@ -93,13 +93,13 @@ def cfg_train():
     # learning rate settings
     lr = {
         # learning rate initial value
-        'init': 5e-3,
+        'init': 1e-3,
         # lr scheduler type: {'linear', 'cosine', 'triangular', 'triangular2'}
         'profile': 'linear',
         # (LINEAR PROFILE) num epoch to adjust learning rate
         'decay_epoch': 10,
         # (LINEAR PROFILE) scaling multiplier at each milestone
-        'decay_scale': 0.8,
+        'decay_scale': 0.9,
         # (COSINE & TRIANGULAR PROFILE) learning rate final value
         'final': 1e-5,
         # (TRIANGULAR PROFILE) period of the cycle to increase the learning rate

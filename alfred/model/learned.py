@@ -85,9 +85,9 @@ class LearnedModel(nn.Module):
                         toks = torch.argmax(model_outs[batch_name]['action'][i], dim=-1)
                         gt_copy = gt_dict['gt_action'].clone()
                         gt_copy[gt_copy==-100] = 0
-                        # print(f'GT action {i}', self.model.encoder_lang.detokenize(gt_copy[i]))
-                        # print(f"Batch Output {i}", self.model.encoder_lang.detokenize(toks))
-                        # print(toks)
+                        print(f'GT Action {i}', self.model.encoder_lang.detokenize(gt_copy[i]))
+                        print(f"Prediction {i}", self.model.encoder_lang.detokenize(toks))
+                        print()
                 gt.stamp('forward pass', unique=False)
                 # compute losses
                 losses_train = self.model.compute_loss(
@@ -165,6 +165,13 @@ class LearnedModel(nn.Module):
                 batch, self.args.device, self.pad, self.model.bridge, self.model.encoder_lang)
             model_out = self.model.forward(
                 gt_action=gt_dict['gt_action'], input=input_dict['input'], input_mask=input_dict['input_mask'])
+            for i in range(len(model_out['action'])):
+                toks = torch.argmax(model_out['action'][i], dim=-1)
+                gt_copy = gt_dict['gt_action'].clone()
+                gt_copy[gt_copy==-100] = 0
+                print(f'GT Action {i}', self.model.encoder_lang.detokenize(gt_copy[i]))
+                print(f"Prediction {i}", self.model.encoder_lang.detokenize(toks))
+                print()
             loss = self.model.compute_batch_loss(model_out, gt_dict)
             for k, v in loss.items():
                 ln = 'loss/' + k

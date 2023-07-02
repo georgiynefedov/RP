@@ -53,14 +53,14 @@ def create_model(args, embs_ann, vocab_out, encoder_lang: EncoderLang):
         # load a saved model
         loadpath = os.path.join(args.dout, 'latest.pth')
         model, optimizer = model_util.load_model(
-            loadpath, args.device, prev_train_info['progress'] - 1, encoder_lang)
+            loadpath, args.device, check_epoch=prev_train_info['progress'] - 1, encoder_lang=encoder_lang)
         assert model.vocab_out.contains_same_content(vocab_out)
         model.args = args
     else:
         # create a new model
         if not args.resume and os.path.isdir(args.dout):
             shutil.rmtree(args.dout)
-        model = LearnedModel(args, embs_ann, vocab_out, encoder_lang)
+        model = LearnedModel(args, embs_ann, vocab_out, encoder_lang=encoder_lang)
         model = model.to(torch.device(args.device))
         optimizer = None
         if args.pretrained_path:

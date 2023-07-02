@@ -15,7 +15,7 @@ class Model(base.Model):
         '''
         transformer agent
         '''
-        super().__init__(args, embs_ann, vocab_out, pad, seg, encoder_lang)
+        super().__init__(args, embs_ann, vocab_out, pad, seg)
         # encoder and visual embeddings
         self.encoder_vl = EncoderVL(args)
         # feature embeddings

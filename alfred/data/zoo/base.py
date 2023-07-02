@@ -36,8 +36,8 @@ class BaseDataset(TorchDataset):
 
         # load data
         self._length = self.load_data(path)
-        if 'train' not in partition:
-            self._length = 1000
+        # if 'train' not in partition:
+        #     self._length = 50000
         if self.args.fast_epoch:
             self._length = 16
             
